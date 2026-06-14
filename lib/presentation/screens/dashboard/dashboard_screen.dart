@@ -35,7 +35,7 @@ class DashboardScreen extends ConsumerWidget {
                     dashAsync.when(
                       data: (data) => _buildContent(context, data),
                       loading: () => const ShimmerLoading(count: 6),
-                      error: (e, _) => _buildError(e.toString()),
+                      error: (e, _) => _buildError(context, e.toString()),
                     ),
                   ]),
                 ),
@@ -95,26 +95,26 @@ class DashboardScreen extends ConsumerWidget {
                   children: [
                     Text(
                       _getGreeting(now.hour),
-                      style: TextStyle(fontSize: 13, color: AppColors.textMuted, fontFamily: 'Inter'),
+                      style: TextStyle(fontSize: 13, color: AppStyle.textMuted(context), fontFamily: 'Inter'),
                     ),
                     const SizedBox(height: 4),
                     profileAsync.when(
                       data: (p) => Text(
                         p?.fullName ?? 'Welcome',
-                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppStyle.text(context), fontFamily: 'Inter', letterSpacing: -0.5),
+                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppStyle.text(context), fontFamily: 'Inter', letterSpacing: -0.5),
                       ),
-                      loading: () => const Text('Loading...', style: TextStyle(fontSize: 24, color: AppStyle.text(context), fontFamily: 'Inter')),
-                      error: (_, __) => Text('VK LifeOS', style: TextStyle(fontSize: 24, color: AppStyle.text(context), fontFamily: 'Inter')),
+                      loading: () => Text('Loading...', style: TextStyle(fontSize: 24, color: AppStyle.text(context), fontFamily: 'Inter')),
+                      error: (_, __) => Text('VishalOS', style: TextStyle(fontSize: 24, color: AppStyle.text(context), fontFamily: 'Inter')),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       DateFormat('EEEE, MMMM d').format(now),
-                      style: TextStyle(fontSize: 13, color: AppColors.textSecondary, fontFamily: 'Inter'),
+                      style: TextStyle(fontSize: 13, color: AppStyle.textSub(context), fontFamily: 'Inter'),
                     ),
                   ],
                 ),
               ),
-              _buildProfileAvatar(profileAsync),
+              _buildProfileAvatar(context, profileAsync),
             ],
           ),
         ),
@@ -122,7 +122,7 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildProfileAvatar(AsyncValue profileAsync) {
+  Widget _buildProfileAvatar(BuildContext context, AsyncValue profileAsync) {
     return profileAsync.when(
       data: (p) => GestureDetector(
         onTap: () {},
@@ -138,8 +138,8 @@ class DashboardScreen extends ConsumerWidget {
               : const Icon(Icons.person, color: Colors.white, size: 24),
         ),
       ),
-      loading: () => const CircleAvatar(radius: 24, backgroundColor: AppColors.darkCard),
-      error: (_, __) => const CircleAvatar(radius: 24, backgroundColor: AppColors.darkCard, child: Icon(Icons.person, color: Colors.white)),
+      loading: () => CircleAvatar(radius: 24, backgroundColor: AppStyle.card(context)),
+      error: (_, __) => CircleAvatar(radius: 24, backgroundColor: AppStyle.card(context), child: const Icon(Icons.person, color: Colors.white)),
     );
   }
 
@@ -147,11 +147,11 @@ class DashboardScreen extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildProductivityScore(data['productivity_score'] ?? 0),
+        _buildProductivityScore(context, data['productivity_score'] ?? 0),
         const SizedBox(height: 20),
         _buildQuickActions(context),
         const SizedBox(height: 20),
-        _buildStatsGrid(data),
+        _buildStatsGrid(context, data),
         const SizedBox(height: 20),
         _buildRecentTasks(context, data['recent_tasks'] as List? ?? []),
         const SizedBox(height: 20),
@@ -161,7 +161,7 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildProductivityScore(int score) {
+  Widget _buildProductivityScore(BuildContext context, int score) {
     return GlassCard(
       child: Row(
         children: [
@@ -169,11 +169,11 @@ class DashboardScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Productivity Score', style: TextStyle(fontSize: 13, color: AppColors.textSecondary, fontFamily: 'Inter')),
+                Text('Productivity Score', style: TextStyle(fontSize: 13, color: AppStyle.textSub(context), fontFamily: 'Inter')),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Text('$score%', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: AppStyle.text(context), fontFamily: 'Inter')),
+                    Text('$score%', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: AppStyle.text(context), fontFamily: 'Inter')),
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -181,7 +181,7 @@ class DashboardScreen extends ConsumerWidget {
                         color: AppColors.success.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Text('Today', style: TextStyle(fontSize: 11, color: AppColors.success, fontFamily: 'Inter', fontWeight: FontWeight.w500)),
+                      child: const Text('Today', style: TextStyle(fontSize: 11, color: AppColors.success, fontFamily: 'Inter', fontWeight: FontWeight.w500)),
                     ),
                   ],
                 ),
@@ -190,7 +190,7 @@ class DashboardScreen extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(6),
                   child: LinearProgressIndicator(
                     value: score / 100,
-                    backgroundColor: AppColors.darkBorder,
+                    backgroundColor: AppStyle.border(context),
                     valueColor: AlwaysStoppedAnimation<Color>(
                       score >= 70 ? AppColors.success : score >= 40 ? AppColors.warning : AppColors.error,
                     ),
@@ -220,15 +220,15 @@ class DashboardScreen extends ConsumerWidget {
       _QA(icon: Icons.add_task, label: 'Add Task', color: AppColors.primary, path: '/tasks'),
       _QA(icon: Icons.note_add_outlined, label: 'New Note', color: AppColors.accent, path: '/notes/new'),
       _QA(icon: Icons.auto_awesome_outlined, label: 'Ask AI', color: const Color(0xFF8B5CF6), path: '/ai'),
-      _QA(icon: Icons.science_outlined, label: 'Research', color: AppColors.success, path: '/research'),
-      _QA(icon: Icons.folder_outlined, label: 'Projects', color: AppColors.warning, path: '/projects'),
-      _QA(icon: Icons.more_horiz, label: 'More', color: AppColors.textSecondary, path: '/admin'),
+      _QA(icon: Icons.flag_outlined, label: 'Goals', color: AppColors.success, path: '/goals'),
+      _QA(icon: Icons.calendar_today_outlined, label: 'Calendar', color: AppColors.warning, path: '/calendar'),
+      _QA(icon: Icons.search_rounded, label: 'Search', color: AppColors.textMuted, path: '/search'),
     ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Quick Actions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppStyle.text(context), fontFamily: 'Inter')),
+        Text('Quick Actions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppStyle.text(context), fontFamily: 'Inter')),
         const SizedBox(height: 12),
         GridView.builder(
           shrinkWrap: true,
@@ -248,7 +248,7 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatsGrid(Map<String, dynamic> data) {
+  Widget _buildStatsGrid(BuildContext context, Map<String, dynamic> data) {
     final tasks = data['tasks'] as Map<String, dynamic>? ?? {};
     final habits = data['habits'] as Map<String, dynamic>? ?? {};
     final finance = data['finance'] as Map<String, dynamic>? ?? {};
@@ -264,7 +264,7 @@ class DashboardScreen extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Overview', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppStyle.text(context), fontFamily: 'Inter')),
+        Text('Overview', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppStyle.text(context), fontFamily: 'Inter')),
         const SizedBox(height: 12),
         GridView.builder(
           shrinkWrap: true,
@@ -293,20 +293,20 @@ class DashboardScreen extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Pending Tasks', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppStyle.text(context), fontFamily: 'Inter')),
+            Text('Pending Tasks', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppStyle.text(context), fontFamily: 'Inter')),
             TextButton(
               onPressed: () => context.go('/tasks'),
-              child: Text('View all', style: TextStyle(color: AppColors.primary, fontSize: 13, fontFamily: 'Inter')),
+              child: const Text('View all', style: TextStyle(color: AppColors.primary, fontSize: 13, fontFamily: 'Inter')),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        ...tasks.take(4).map((t) => _buildTaskItem(t as Map<String, dynamic>)).toList(),
+        ...tasks.take(4).map((t) => _buildTaskItem(context, t as Map<String, dynamic>)),
       ],
     );
   }
 
-  Widget _buildTaskItem(Map<String, dynamic> task) {
+  Widget _buildTaskItem(BuildContext context, Map<String, dynamic> task) {
     final priority = task['priority'] ?? 'medium';
     final priorityColor = priority == 'high' ? AppColors.priorityHigh : priority == 'low' ? AppColors.priorityLow : AppColors.priorityMedium;
 
@@ -323,9 +323,9 @@ class DashboardScreen extends ConsumerWidget {
         children: [
           Container(width: 3, height: 24, decoration: BoxDecoration(color: priorityColor, borderRadius: BorderRadius.circular(2))),
           const SizedBox(width: 12),
-          Expanded(child: Text(task['title'] ?? '', style: const TextStyle(color: Colors.white, fontSize: 14, fontFamily: 'Inter'), maxLines: 1, overflow: TextOverflow.ellipsis)),
+          Expanded(child: Text(task['title'] ?? '', style: TextStyle(color: AppStyle.text(context), fontSize: 14, fontFamily: 'Inter'), maxLines: 1, overflow: TextOverflow.ellipsis)),
           if (task['due_date'] != null)
-            Text(task['due_date'].toString(), style: TextStyle(color: AppColors.textMuted, fontSize: 11, fontFamily: 'Inter')),
+            Text(task['due_date'].toString(), style: TextStyle(color: AppStyle.textMuted(context), fontSize: 11, fontFamily: 'Inter')),
         ],
       ),
     );
@@ -339,10 +339,10 @@ class DashboardScreen extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Recent Notes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppStyle.text(context), fontFamily: 'Inter')),
+            Text('Recent Notes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppStyle.text(context), fontFamily: 'Inter')),
             TextButton(
               onPressed: () => context.go('/notes'),
-              child: Text('View all', style: TextStyle(color: AppColors.primary, fontSize: 13, fontFamily: 'Inter')),
+              child: const Text('View all', style: TextStyle(color: AppColors.primary, fontSize: 13, fontFamily: 'Inter')),
             ),
           ],
         ),
@@ -361,16 +361,17 @@ class DashboardScreen extends ConsumerWidget {
                   width: 140,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.darkCard,
+                    color: AppStyle.card(context),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.darkBorder, width: 0.5),
+                    border: Border.all(color: AppStyle.border(context), width: 0.5),
+                    boxShadow: AppStyle.cardShadow(context),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Icon(Icons.sticky_note_2_outlined, color: AppColors.primary, size: 18),
                       const SizedBox(height: 6),
-                      Text(note['title'] ?? 'Untitled', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500, fontFamily: 'Inter'), maxLines: 2, overflow: TextOverflow.ellipsis),
+                      Text(note['title'] ?? 'Untitled', style: TextStyle(color: AppStyle.text(context), fontSize: 13, fontWeight: FontWeight.w500, fontFamily: 'Inter'), maxLines: 2, overflow: TextOverflow.ellipsis),
                     ],
                   ),
                 ),
@@ -382,17 +383,17 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildError(String msg) {
+  Widget _buildError(BuildContext context, String msg) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           children: [
-            Icon(Icons.wifi_off, color: AppColors.textMuted, size: 48),
+            Icon(Icons.wifi_off, color: AppStyle.textMuted(context), size: 48),
             const SizedBox(height: 16),
-            Text('Could not load dashboard', style: TextStyle(color: AppColors.textSecondary, fontFamily: 'Inter')),
+            Text('Could not load dashboard', style: TextStyle(color: AppStyle.textSub(context), fontFamily: 'Inter')),
             const SizedBox(height: 8),
-            Text(msg, style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontFamily: 'Inter'), textAlign: TextAlign.center),
+            Text(msg, style: TextStyle(color: AppStyle.textMuted(context), fontSize: 12, fontFamily: 'Inter'), textAlign: TextAlign.center),
           ],
         ),
       ),
@@ -407,5 +408,17 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-class _QA { final IconData icon; final String label; final Color color; final String path; const _QA({required this.icon, required this.label, required this.color, required this.path}); }
-class _Stat { final String label; final String value; final String sub; final Color color; final IconData icon; const _Stat({required this.label, required this.value, required this.sub, required this.color, required this.icon}); }
+class _QA {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final String path;
+  const _QA({required this.icon, required this.label, required this.color, required this.path});
+}
+
+class _Stat {
+  final String label, value, sub;
+  final Color color;
+  final IconData icon;
+  const _Stat({required this.label, required this.value, required this.sub, required this.color, required this.icon});
+}

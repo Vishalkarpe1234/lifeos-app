@@ -8,11 +8,11 @@ class MainShell extends ConsumerWidget {
   const MainShell({super.key, required this.child});
 
   static const _navItems = [
-    _NavItem(icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard_rounded, label: 'Home',    path: '/dashboard'),
-    _NavItem(icon: Icons.task_alt_outlined,  activeIcon: Icons.task_alt_rounded,  label: 'Tasks',   path: '/tasks'),
+    _NavItem(icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard_rounded, label: 'Home', path: '/dashboard'),
+    _NavItem(icon: Icons.task_alt_outlined, activeIcon: Icons.task_alt_rounded, label: 'Tasks', path: '/tasks'),
     _NavItem(icon: Icons.sticky_note_2_outlined, activeIcon: Icons.sticky_note_2_rounded, label: 'Notes', path: '/notes'),
     _NavItem(icon: Icons.auto_awesome_outlined, activeIcon: Icons.auto_awesome_rounded, label: 'AI', path: '/ai'),
-    _NavItem(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded, label: 'Profile', path: '/profile'),
+    _NavItem(icon: Icons.grid_view_rounded, activeIcon: Icons.grid_view_rounded, label: 'More', path: '/modules'),
   ];
 
   @override
@@ -21,7 +21,7 @@ class MainShell extends ConsumerWidget {
     final currentIndex = _navItems.indexWhere((i) => location.startsWith(i.path));
     final isWide = MediaQuery.of(context).size.width > 800;
 
-    if (isWide) return _WideLayout(child: child, currentIndex: currentIndex);
+    if (isWide) return _WideLayout(child: child, location: location);
 
     return Scaffold(
       backgroundColor: AppStyle.bg(context),
@@ -38,7 +38,7 @@ class MainShell extends ConsumerWidget {
         border: Border(top: BorderSide(color: AppStyle.border(context), width: 0.5)),
         boxShadow: isDark
             ? [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, -4))]
-            : [BoxShadow(color: const Color(0x0C000000), blurRadius: 20, offset: const Offset(0, -6))],
+            : [const BoxShadow(color: Color(0x0C000000), blurRadius: 20, offset: Offset(0, -6))],
       ),
       child: SafeArea(
         child: Padding(
@@ -69,10 +69,7 @@ class _NavButton extends StatelessWidget {
         duration: const Duration(milliseconds: 220),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: isActive
-            ? BoxDecoration(
-                color: AppColors.primary.withOpacity(0.10),
-                borderRadius: BorderRadius.circular(12),
-              )
+            ? BoxDecoration(color: AppColors.primary.withOpacity(0.10), borderRadius: BorderRadius.circular(12))
             : null,
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -105,23 +102,29 @@ class _NavButton extends StatelessWidget {
 
 class _WideLayout extends StatelessWidget {
   final Widget child;
-  final int currentIndex;
+  final String location;
 
   static const _sideItems = [
     _NavItem(icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard_rounded, label: 'Dashboard', path: '/dashboard'),
-    _NavItem(icon: Icons.task_alt_outlined, activeIcon: Icons.task_alt_rounded, label: 'Tasks', path: '/tasks'),
     _NavItem(icon: Icons.sticky_note_2_outlined, activeIcon: Icons.sticky_note_2_rounded, label: 'Notes', path: '/notes'),
-    _NavItem(icon: Icons.science_outlined, activeIcon: Icons.science_rounded, label: 'Research', path: '/research'),
-    _NavItem(icon: Icons.school_outlined, activeIcon: Icons.school_rounded, label: 'Teaching', path: '/teaching'),
-    _NavItem(icon: Icons.folder_outlined, activeIcon: Icons.folder_rounded, label: 'Projects', path: '/projects'),
-    _NavItem(icon: Icons.account_balance_wallet_outlined, activeIcon: Icons.account_balance_wallet_rounded, label: 'Finance', path: '/finance'),
+    _NavItem(icon: Icons.mic_none_rounded, activeIcon: Icons.mic_rounded, label: 'Voice Notes', path: '/voice-notes'),
+    _NavItem(icon: Icons.book_outlined, activeIcon: Icons.book_rounded, label: 'Journal', path: '/journal'),
+    _NavItem(icon: Icons.task_alt_outlined, activeIcon: Icons.task_alt_rounded, label: 'Tasks', path: '/tasks'),
+    _NavItem(icon: Icons.calendar_today_outlined, activeIcon: Icons.calendar_today_rounded, label: 'Calendar', path: '/calendar'),
+    _NavItem(icon: Icons.flag_outlined, activeIcon: Icons.flag_rounded, label: 'Goals', path: '/goals'),
     _NavItem(icon: Icons.loop_outlined, activeIcon: Icons.loop_rounded, label: 'Habits', path: '/habits'),
-    _NavItem(icon: Icons.auto_awesome_outlined, activeIcon: Icons.auto_awesome_rounded, label: 'AI', path: '/ai'),
+    _NavItem(icon: Icons.account_balance_wallet_outlined, activeIcon: Icons.account_balance_wallet_rounded, label: 'Finance', path: '/finance'),
+    _NavItem(icon: Icons.favorite_border_rounded, activeIcon: Icons.favorite_rounded, label: 'Health', path: '/health'),
+    _NavItem(icon: Icons.school_outlined, activeIcon: Icons.school_rounded, label: 'Learning', path: '/learning'),
+    _NavItem(icon: Icons.contacts_outlined, activeIcon: Icons.contacts_rounded, label: 'Contacts', path: '/contacts'),
+    _NavItem(icon: Icons.auto_awesome_outlined, activeIcon: Icons.auto_awesome_rounded, label: 'AI Chat', path: '/ai'),
+    _NavItem(icon: Icons.timeline_outlined, activeIcon: Icons.timeline_rounded, label: 'Timeline', path: '/timeline'),
+    _NavItem(icon: Icons.search_rounded, activeIcon: Icons.search_rounded, label: 'Search', path: '/search'),
     _NavItem(icon: Icons.person_outline, activeIcon: Icons.person_rounded, label: 'Profile', path: '/profile'),
     _NavItem(icon: Icons.admin_panel_settings_outlined, activeIcon: Icons.admin_panel_settings_rounded, label: 'Admin', path: '/admin'),
   ];
 
-  const _WideLayout({required this.child, required this.currentIndex});
+  const _WideLayout({required this.child, required this.location});
 
   @override
   Widget build(BuildContext context) {
@@ -142,7 +145,7 @@ class _WideLayout extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppStyle.navBg(context),
         border: Border(right: BorderSide(color: AppStyle.border(context), width: 0.5)),
-        boxShadow: [BoxShadow(color: const Color(0x08000000), blurRadius: 16, offset: const Offset(4, 0))],
+        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 16, offset: Offset(4, 0))],
       ),
       child: SafeArea(
         child: Column(
@@ -154,8 +157,9 @@ class _WideLayout extends StatelessWidget {
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                children: _sideItems.asMap().entries.map((e) {
-                  return _SideNavItem(item: e.value, isActive: e.key == currentIndex, onTap: () => context.go(e.value.path));
+                children: _sideItems.map((item) {
+                  final isActive = location.startsWith(item.path);
+                  return _SideNavItem(item: item, isActive: isActive, onTap: () => context.go(item.path));
                 }).toList(),
               ),
             ),
@@ -177,14 +181,14 @@ class _WideLayout extends StatelessWidget {
               gradient: AppColors.primaryGradient,
               boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
             ),
-            child: const Center(child: Text('VK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14, fontFamily: 'Inter'))),
+            child: const Center(child: Text('V∞', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, fontFamily: 'Inter'))),
           ),
           const SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('VK LifeOS', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppStyle.text(context), fontFamily: 'Inter')),
-              Text('Vishal Karpe', style: TextStyle(fontSize: 10, color: AppStyle.textMuted(context), fontFamily: 'Inter')),
+              Text('VishalOS', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppStyle.text(context), fontFamily: 'Inter')),
+              Text('AI Life OS', style: TextStyle(fontSize: 10, color: AppStyle.textMuted(context), fontFamily: 'Inter')),
             ],
           ),
         ],

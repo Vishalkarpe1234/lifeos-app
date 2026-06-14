@@ -8,7 +8,8 @@ import 'package:lifeos/presentation/providers/auth_provider.dart';
 import 'package:lifeos/presentation/widgets/common/loading_button.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  final bool adminMode;
+  const LoginScreen({super.key, this.adminMode = false});
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();

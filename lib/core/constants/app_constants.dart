@@ -1,6 +1,6 @@
 class AppConstants {
-  static const String appName = 'VK LifeOS';
-  static const String appTagline = 'One App. One Life. Everything Connected.';
+  static const String appName = 'VishalOS';
+  static const String appTagline = 'Your AI Life Operating System';
   static const String appVersion = '1.0.0';
 
   // API
