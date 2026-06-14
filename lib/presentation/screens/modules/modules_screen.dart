@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
+import 'package:lifeos/presentation/providers/auth_provider.dart';
 
-class ModulesScreen extends StatelessWidget {
+class ModulesScreen extends ConsumerWidget {
   const ModulesScreen({super.key});
 
   static const _modules = [
@@ -31,7 +33,10 @@ class ModulesScreen extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isAdmin = ref.watch(authStateProvider).isAdmin;
+    final modules = isAdmin ? _modules : _modules.where((m) => m.path != '/admin').toList();
+
     return Scaffold(
       backgroundColor: AppStyle.bg(context),
       appBar: AppBar(
@@ -45,9 +50,9 @@ class ModulesScreen extends StatelessWidget {
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3, mainAxisSpacing: 12, crossAxisSpacing: 12, childAspectRatio: 0.85,
         ),
-        itemCount: _modules.length,
+        itemCount: modules.length,
         itemBuilder: (context, i) {
-          final m = _modules[i];
+          final m = modules[i];
           return GestureDetector(
             onTap: () => context.go(m.path),
             child: Container(

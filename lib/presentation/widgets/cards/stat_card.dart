@@ -26,14 +26,14 @@ class StatCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.darkCard,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.darkBorder, width: 0.5),
+          border: Border.all(color: AppStyle.border(context), width: 0.5),
           gradient: LinearGradient(
-            colors: [AppColors.darkCard, accentColor.withOpacity(0.05)],
+            colors: [AppStyle.card(context), accentColor.withOpacity(0.08)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
+          boxShadow: AppStyle.cardShadow(context),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -62,15 +62,15 @@ class StatCard extends StatelessWidget {
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
-                color: Colors.white,
+                color: AppStyle.text(context),
                 fontFamily: 'Inter',
                 letterSpacing: -0.5,
               ),
             ),
             const SizedBox(height: 2),
-            Text(label, style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontFamily: 'Inter', fontWeight: FontWeight.w500)),
+            Text(label, style: TextStyle(fontSize: 12, color: AppStyle.textSub(context), fontFamily: 'Inter', fontWeight: FontWeight.w500)),
             if (subtitle != null)
-              Text(subtitle!, style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontFamily: 'Inter')),
+              Text(subtitle!, style: TextStyle(fontSize: 11, color: AppStyle.textMuted(context), fontFamily: 'Inter')),
           ],
         ),
       ),

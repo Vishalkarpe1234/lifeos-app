@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
+import 'package:lifeos/presentation/providers/auth_provider.dart';
 
 class MainShell extends ConsumerWidget {
   final Widget child;
@@ -21,7 +22,7 @@ class MainShell extends ConsumerWidget {
     final currentIndex = _navItems.indexWhere((i) => location.startsWith(i.path));
     final isWide = MediaQuery.of(context).size.width > 800;
 
-    if (isWide) return _WideLayout(child: child, location: location);
+    if (isWide) return _WideLayout(child: child, location: location, ref: ref);
 
     return Scaffold(
       backgroundColor: AppStyle.bg(context),
@@ -103,6 +104,7 @@ class _NavButton extends StatelessWidget {
 class _WideLayout extends StatelessWidget {
   final Widget child;
   final String location;
+  final WidgetRef ref;
 
   static const _sideItems = [
     _NavItem(icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard_rounded, label: 'Dashboard', path: '/dashboard'),
@@ -124,7 +126,7 @@ class _WideLayout extends StatelessWidget {
     _NavItem(icon: Icons.admin_panel_settings_outlined, activeIcon: Icons.admin_panel_settings_rounded, label: 'Admin', path: '/admin'),
   ];
 
-  const _WideLayout({required this.child, required this.location});
+  const _WideLayout({required this.child, required this.location, required this.ref});
 
   @override
   Widget build(BuildContext context) {
@@ -157,7 +159,10 @@ class _WideLayout extends StatelessWidget {
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                children: _sideItems.map((item) {
+                children: _sideItems.where((item) {
+                  if (item.path == '/admin') return ref.read(authStateProvider).isAdmin;
+                  return true;
+                }).map((item) {
                   final isActive = location.startsWith(item.path);
                   return _SideNavItem(item: item, isActive: isActive, onTap: () => context.go(item.path));
                 }).toList(),

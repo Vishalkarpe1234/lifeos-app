@@ -215,40 +215,6 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                 onTap: () => context.go('/register'),
               ).animate().fadeIn(delay: 550.ms).slideY(begin: 0.1, end: 0),
 
-              const SizedBox(height: 24),
-
-              Row(
-                children: [
-                  Expanded(child: Divider(color: Colors.white.withOpacity(0.12))),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text('or', style: TextStyle(color: Colors.white.withOpacity(0.35), fontSize: 12, fontFamily: 'Inter')),
-                  ),
-                  Expanded(child: Divider(color: Colors.white.withOpacity(0.12))),
-                ],
-              ),
-
-              const SizedBox(height: 18),
-
-              // Admin login
-              GestureDetector(
-                onTap: () => context.go('/admin-login'),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.white.withOpacity(0.15)),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.admin_panel_settings_rounded, size: 18, color: Colors.white.withOpacity(0.5)),
-                      const SizedBox(width: 8),
-                      Text('Admin Login', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14, fontFamily: 'Inter', fontWeight: FontWeight.w500)),
-                    ],
-                  ),
-                ),
-              ).animate().fadeIn(delay: 650.ms),
             ],
           ),
         ),

@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
+import 'package:lifeos/presentation/providers/auth_provider.dart';
 import 'package:lifeos/presentation/providers/dashboard_provider.dart';
 import 'package:lifeos/presentation/providers/profile_provider.dart';
 import 'package:lifeos/presentation/widgets/cards/stat_card.dart';
@@ -89,6 +90,19 @@ class DashboardScreen extends ConsumerWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Container(
+                width: 36, height: 36,
+                margin: const EdgeInsets.only(right: 12, top: 2),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  color: Colors.white,
+                  boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.15), blurRadius: 8)],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
+                ),
+              ),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -104,7 +118,7 @@ class DashboardScreen extends ConsumerWidget {
                         style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppStyle.text(context), fontFamily: 'Inter', letterSpacing: -0.5),
                       ),
                       loading: () => Text('Loading...', style: TextStyle(fontSize: 24, color: AppStyle.text(context), fontFamily: 'Inter')),
-                      error: (_, __) => Text('VishalOS', style: TextStyle(fontSize: 24, color: AppStyle.text(context), fontFamily: 'Inter')),
+                      error: (_, __) => Text('VK OS', style: TextStyle(fontSize: 24, color: AppStyle.text(context), fontFamily: 'Inter')),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -123,9 +137,17 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   Widget _buildProfileAvatar(BuildContext context, AsyncValue profileAsync) {
+    void showMenu() {
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (_) => _ProfileSheet(parentContext: context),
+      );
+    }
+
     return profileAsync.when(
       data: (p) => GestureDetector(
-        onTap: () {},
+        onTap: showMenu,
         child: Container(
           width: 48, height: 48,
           decoration: BoxDecoration(
@@ -139,7 +161,10 @@ class DashboardScreen extends ConsumerWidget {
         ),
       ),
       loading: () => CircleAvatar(radius: 24, backgroundColor: AppStyle.card(context)),
-      error: (_, __) => CircleAvatar(radius: 24, backgroundColor: AppStyle.card(context), child: const Icon(Icons.person, color: Colors.white)),
+      error: (_, __) => GestureDetector(
+        onTap: showMenu,
+        child: CircleAvatar(radius: 24, backgroundColor: AppStyle.card(context), child: const Icon(Icons.person, color: Colors.white)),
+      ),
     );
   }
 
@@ -212,7 +237,7 @@ class DashboardScreen extends ConsumerWidget {
           ),
         ],
       ),
-    ).animate().fadeIn(duration: 500.ms).slideX(begin: -0.05);
+    );
   }
 
   Widget _buildQuickActions(BuildContext context) {
@@ -242,7 +267,7 @@ class DashboardScreen extends ConsumerWidget {
             label: actions[i].label,
             color: actions[i].color,
             onTap: () => context.go(actions[i].path),
-          ).animate(delay: (50 * i).ms).fadeIn().scale(begin: const Offset(0.9, 0.9)),
+          ),
         ),
       ],
     );
@@ -279,7 +304,7 @@ class DashboardScreen extends ConsumerWidget {
             subtitle: stats[i].sub,
             accentColor: stats[i].color,
             icon: stats[i].icon,
-          ).animate(delay: (80 * i).ms).fadeIn().scale(begin: const Offset(0.9, 0.9)),
+          ),
         ),
       ],
     );
@@ -421,4 +446,101 @@ class _Stat {
   final Color color;
   final IconData icon;
   const _Stat({required this.label, required this.value, required this.sub, required this.color, required this.icon});
+}
+
+class _ProfileSheet extends ConsumerWidget {
+  final BuildContext parentContext;
+  const _ProfileSheet({required this.parentContext});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppStyle.card(context),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 40, height: 4, decoration: BoxDecoration(color: AppStyle.border(context), borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 20),
+          _SheetItem(
+            icon: Icons.person_outline,
+            label: 'View Profile',
+            color: AppColors.primary,
+            onTap: () {
+              Navigator.pop(context);
+              parentContext.go('/profile');
+            },
+          ),
+          const SizedBox(height: 8),
+          _SheetItem(
+            icon: Icons.settings_outlined,
+            label: 'Settings',
+            color: AppColors.accent,
+            onTap: () {
+              Navigator.pop(context);
+              parentContext.go('/settings');
+            },
+          ),
+          const SizedBox(height: 8),
+          _SheetItem(
+            icon: Icons.logout_rounded,
+            label: 'Sign Out',
+            color: AppColors.error,
+            onTap: () async {
+              Navigator.pop(context);
+              final confirm = await showDialog<bool>(
+                context: parentContext,
+                builder: (_) => AlertDialog(
+                  backgroundColor: AppStyle.card(parentContext),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  title: Text('Sign Out?', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, color: AppStyle.text(parentContext))),
+                  content: Text('You will be returned to the login screen.', style: TextStyle(fontFamily: 'Inter', color: AppStyle.textSub(parentContext))),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(parentContext, false), child: Text('Cancel', style: TextStyle(color: AppStyle.textMuted(parentContext), fontFamily: 'Inter'))),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(parentContext, true),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+                      child: const Text('Sign Out', style: TextStyle(color: Colors.white, fontFamily: 'Inter')),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true && parentContext.mounted) {
+                await ref.read(authStateProvider.notifier).logout();
+                if (parentContext.mounted) parentContext.go('/login');
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SheetItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _SheetItem({required this.icon, required this.label, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      onTap: onTap,
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+        child: Icon(icon, color: color, size: 20),
+      ),
+      title: Text(label, style: TextStyle(color: color == AppColors.error ? AppColors.error : AppStyle.text(context), fontFamily: 'Inter', fontWeight: FontWeight.w500, fontSize: 15)),
+      trailing: Icon(Icons.chevron_right, color: AppStyle.textMuted(context), size: 18),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      tileColor: AppStyle.surface(context),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+    );
+  }
 }

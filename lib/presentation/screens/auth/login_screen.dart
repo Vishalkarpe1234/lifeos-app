@@ -17,7 +17,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController(text: 'karpevishal2712001@gmail.com');
+  final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _urlCtrl = TextEditingController(text: AppConstants.defaultBaseUrl);
   bool _obscure = true;
@@ -35,7 +35,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void _switchToAdmin() {
     setState(() {
       _isAdminMode = true;
-      _emailCtrl.text = 'admin@lifeos.app';
+      _emailCtrl.text = 'hivetech1010@gmail.com';
       _passwordCtrl.text = '';
     });
   }
@@ -366,37 +366,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return TextButton.icon(
         onPressed: () => setState(() {
           _isAdminMode = false;
-          _emailCtrl.text = 'karpevishal2712001@gmail.com';
+          _emailCtrl.text = '';
           _passwordCtrl.text = '';
         }),
-        icon: const Icon(Icons.arrow_back, size: 16),
-        label: const Text('Back to User Login', style: TextStyle(fontSize: 13, fontFamily: 'Inter')),
-        style: TextButton.styleFrom(foregroundColor: AppColors.lightTextSub),
+        icon: const Icon(Icons.arrow_back, size: 14),
+        label: const Text('Back to User Login', style: TextStyle(fontSize: 12, fontFamily: 'Inter')),
+        style: TextButton.styleFrom(foregroundColor: AppColors.lightTextMuted),
       );
     }
-    return GestureDetector(
-      onTap: _switchToAdmin,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.4)),
-          color: const Color(0xFF8B5CF6).withOpacity(0.06),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.admin_panel_settings_outlined, color: Color(0xFF8B5CF6), size: 20),
-            const SizedBox(width: 10),
-            const Text(
-              'Admin Panel',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF8B5CF6), fontFamily: 'Inter'),
-            ),
-            const Spacer(),
-            Icon(Icons.arrow_forward_ios, color: const Color(0xFF8B5CF6).withOpacity(0.7), size: 14),
-          ],
-        ),
-      ),
+    return TextButton.icon(
+      onPressed: _switchToAdmin,
+      icon: Icon(Icons.admin_panel_settings_outlined, size: 13, color: AppColors.lightTextMuted),
+      label: Text('Admin', style: TextStyle(fontSize: 11, color: AppColors.lightTextMuted, fontFamily: 'Inter')),
+      style: TextButton.styleFrom(padding: EdgeInsets.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
     ).animate(delay: 400.ms).fadeIn();
   }
 }
