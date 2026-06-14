@@ -29,34 +29,45 @@ class GlassCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final radius = borderRadius ?? 20.0;
 
+    if (!isDark) {
+      // Light mode: clean card with shadow (no blur)
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          margin: margin,
+          padding: padding ?? const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: backgroundColor ?? AppColors.lightCard,
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(color: borderColor ?? AppColors.lightBorder.withOpacity(0.7)),
+            boxShadow: shadows ?? AppStyle.cardShadow(context),
+          ),
+          child: child,
+        ),
+      );
+    }
+
+    // Dark mode: glassmorphism
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: margin,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(borderRadius ?? 20),
-          boxShadow: shadows ?? [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 20,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          borderRadius: BorderRadius.circular(radius),
+          boxShadow: shadows ?? [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 4))],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(borderRadius ?? 20),
+          borderRadius: BorderRadius.circular(radius),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
             child: Container(
               padding: padding ?? const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: backgroundColor ?? (isDark ? AppColors.glassDark : AppColors.glassLight),
-                borderRadius: BorderRadius.circular(borderRadius ?? 20),
-                border: Border.all(
-                  color: borderColor ?? AppColors.glassBorder,
-                  width: 0.5,
-                ),
+                color: backgroundColor ?? AppColors.glassDark,
+                borderRadius: BorderRadius.circular(radius),
+                border: Border.all(color: borderColor ?? AppColors.glassBorder, width: 0.5),
               ),
               child: child,
             ),
