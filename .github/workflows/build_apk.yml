@@ -108,11 +108,11 @@ jobs:
             5. Backend is live at: https://vishalos-backend.onrender.com
 
             ### What's in this build:
-            - Full VK OS dashboard with productivity tracking
-            - Tasks, Notes, Journal, Goals, Habits, Finance, Health, Learning
-            - AI Chat, Voice Notes, Calendar, Contacts, Timeline
-            - Profile, Settings with logout
-            - Admin panel (admin only)
+            - Clean Notes app: add, edit, delete, pin, search notes
+            - Profile: change password, change email, delete account
+            - Admin panel: manage users, view all notes (admin only)
+            - White background, black text — clean and readable
+            - Backend: https://vishalos-backend.onrender.com
 
             **Built with Flutter 3.32.4 | Release signed APK**
           artifacts: |
