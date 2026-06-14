@@ -49,8 +49,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> _loadToken() async {
     final token = await _storage.read(key: AppConstants.keyAccessToken);
     final email = await _storage.read(key: AppConstants.keyUserEmail);
+    final isAdmin = await _storage.read(key: 'is_admin');
     if (token != null) {
-      state = state.copyWith(accessToken: token, userEmail: email);
+      state = state.copyWith(accessToken: token, userEmail: email, isAdmin: isAdmin == 'true');
     }
   }
 
@@ -67,7 +68,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _storage.write(key: AppConstants.keyBaseUrl, value: baseUrl);
 
       final meResp = await dio.get('/api/v1/auth/me', options: Options(headers: {'Authorization': 'Bearer $token'}));
-      state = state.copyWith(accessToken: token, userEmail: email, isAdmin: meResp.data['is_admin'] ?? false, isLoading: false);
+      final isAdmin = meResp.data['is_admin'] ?? false;
+      await _storage.write(key: 'is_admin', value: isAdmin.toString());
+      state = state.copyWith(accessToken: token, userEmail: email, isAdmin: isAdmin, isLoading: false);
       return true;
     } on DioException catch (e) {
       final msg = e.response?.data?['detail'] ?? 'Login failed';
@@ -95,6 +98,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> logout() async {
     await _storage.delete(key: AppConstants.keyAccessToken);
     await _storage.delete(key: AppConstants.keyRefreshToken);
+    await _storage.delete(key: 'is_admin');
     state = const AuthState();
   }
 

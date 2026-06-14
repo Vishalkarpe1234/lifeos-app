@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
@@ -7,119 +6,81 @@ import 'package:lifeos/presentation/providers/notes_provider.dart';
 
 class NoteEditorScreen extends ConsumerStatefulWidget {
   final int? noteId;
-  const NoteEditorScreen({super.key, this.noteId});
-
+  final Note? existingNote;
+  const NoteEditorScreen({super.key, this.noteId, this.existingNote});
   @override
   ConsumerState<NoteEditorScreen> createState() => _NoteEditorScreenState();
 }
 
 class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
-  final _titleCtrl = TextEditingController();
-  final _contentCtrl = TextEditingController();
-  bool _isPreview = false;
-  bool _isSaving = false;
-  bool _isLoaded = false;
+  late final TextEditingController _titleCtrl;
+  late final TextEditingController _contentCtrl;
+  bool _isPinned = false;
+  bool _saving = false;
+  Note? _note;
 
   @override
   void initState() {
     super.initState();
-    if (widget.noteId != null) _loadNote();
-  }
-
-  Future<void> _loadNote() async {
-    final note = await ref.read(noteDetailProvider(widget.noteId!).future);
-    if (note != null && mounted) {
-      _titleCtrl.text = note['title'] ?? '';
-      _contentCtrl.text = note['content'] ?? '';
-      setState(() => _isLoaded = true);
-    }
-  }
-
-  Future<void> _save() async {
-    if (_titleCtrl.text.isEmpty) return;
-    setState(() => _isSaving = true);
-    final notifier = ref.read(notesProvider.notifier);
-    if (widget.noteId != null) {
-      await notifier.updateNote(widget.noteId!, title: _titleCtrl.text, content: _contentCtrl.text);
-    } else {
-      await notifier.createNote(title: _titleCtrl.text, content: _contentCtrl.text);
-    }
-    setState(() => _isSaving = false);
-    if (mounted) context.pop();
+    _note = widget.existingNote;
+    _titleCtrl = TextEditingController(text: _note?.title ?? '');
+    _contentCtrl = TextEditingController(text: _note?.content ?? '');
+    _isPinned = _note?.isPinned ?? false;
   }
 
   @override
-  void dispose() {
-    _titleCtrl.dispose();
-    _contentCtrl.dispose();
-    super.dispose();
+  void dispose() { _titleCtrl.dispose(); _contentCtrl.dispose(); super.dispose(); }
+
+  Future<void> _save() async {
+    final title = _titleCtrl.text.trim();
+    if (title.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Title is required'))); return; }
+    setState(() => _saving = true);
+    bool success;
+    if (_note != null) {
+      success = await ref.read(notesProvider.notifier).updateNote(id: _note!.id, title: title, content: _contentCtrl.text.trim(), isPinned: _isPinned);
+    } else {
+      success = await ref.read(notesProvider.notifier).createNote(title: title, content: _contentCtrl.text.trim(), isPinned: _isPinned);
+    }
+    if (mounted) {
+      setState(() => _saving = false);
+      if (success) context.pop();
+      else ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to save note'), backgroundColor: AppColors.error));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.darkBg,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(widget.noteId == null ? 'New Note' : 'Edit Note', style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
+        title: Text(_note == null ? 'New Note' : 'Edit Note'),
+        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.text, size: 20), onPressed: () => context.pop()),
         actions: [
-          IconButton(
-            icon: Icon(_isPreview ? Icons.edit_outlined : Icons.preview_outlined),
-            onPressed: () => setState(() => _isPreview = !_isPreview),
-            tooltip: _isPreview ? 'Edit' : 'Preview',
-          ),
-          if (_isSaving)
-            const Padding(padding: EdgeInsets.all(16), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)))
-          else
-            IconButton(icon: const Icon(Icons.check, color: AppColors.primary), onPressed: _save, tooltip: 'Save'),
+          IconButton(icon: Icon(_isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined, color: _isPinned ? AppColors.primary : AppColors.textMuted), onPressed: () => setState(() => _isPinned = !_isPinned)),
+          _saving
+            ? const Padding(padding: EdgeInsets.all(14), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2)))
+            : TextButton(onPressed: _save, child: const Text('Save', style: TextStyle(color: AppColors.primary, fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 15))),
         ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: _titleCtrl,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white, fontFamily: 'Inter'),
-              decoration: const InputDecoration(
-                hintText: 'Title',
-                hintStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textMuted),
-                border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none,
-              ),
+        padding: const EdgeInsets.all(20),
+        child: Column(children: [
+          TextField(
+            controller: _titleCtrl,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.text, fontFamily: 'Inter'),
+            decoration: const InputDecoration(hintText: 'Title', hintStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textMuted, fontFamily: 'Inter'), border: InputBorder.none, fillColor: Colors.transparent, filled: false),
+          ),
+          const Divider(color: AppColors.border),
+          Expanded(
+            child: TextField(
+              controller: _contentCtrl,
+              maxLines: null,
+              expands: true,
+              style: const TextStyle(fontSize: 15, color: AppColors.text, fontFamily: 'Inter', height: 1.6),
+              decoration: const InputDecoration(hintText: 'Start writing...', hintStyle: TextStyle(fontSize: 15, color: AppColors.textMuted, fontFamily: 'Inter'), border: InputBorder.none, fillColor: Colors.transparent, filled: false),
             ),
-            const Divider(color: AppColors.darkBorder, height: 1),
-            const SizedBox(height: 16),
-            Expanded(
-              child: _isPreview
-                  ? Markdown(
-                      data: _contentCtrl.text,
-                      styleSheet: MarkdownStyleSheet(
-                        p: const TextStyle(color: AppColors.textPrimary, fontFamily: 'Inter', fontSize: 15, height: 1.6),
-                        h1: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800, fontFamily: 'Inter'),
-                        h2: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700, fontFamily: 'Inter'),
-                        h3: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600, fontFamily: 'Inter'),
-                        code: const TextStyle(color: AppColors.accent, backgroundColor: AppColors.darkCard, fontFamily: 'monospace', fontSize: 13),
-                        blockquoteDecoration: BoxDecoration(
-                          color: AppColors.darkCard,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border(left: BorderSide(color: AppColors.primary, width: 3)),
-                        ),
-                      ),
-                    )
-                  : TextField(
-                      controller: _contentCtrl,
-                      maxLines: null,
-                      expands: true,
-                      style: const TextStyle(fontSize: 15, color: AppColors.textPrimary, fontFamily: 'Inter', height: 1.6),
-                      decoration: const InputDecoration(
-                        hintText: 'Start writing in Markdown...\n\n# Heading\n**bold** *italic*\n- list item',
-                        hintStyle: TextStyle(color: AppColors.textMuted, fontFamily: 'Inter', fontSize: 14),
-                        border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ),
-            ),
-          ],
-        ),
+          ),
+        ]),
       ),
     );
   }

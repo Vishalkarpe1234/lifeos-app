@@ -7,7 +7,6 @@ import 'package:lifeos/services/api/api_client.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
-
   @override
   ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
@@ -19,37 +18,25 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _passCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
   bool _loading = false;
-  bool _obscurePass = true;
-  bool _obscureConfirm = true;
+  bool _obscure = true;
+  bool _obscureC = true;
   String? _error;
 
   @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _emailCtrl.dispose();
-    _passCtrl.dispose();
-    _confirmCtrl.dispose();
-    super.dispose();
-  }
+  void dispose() { _nameCtrl.dispose(); _emailCtrl.dispose(); _passCtrl.dispose(); _confirmCtrl.dispose(); super.dispose(); }
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() { _loading = true; _error = null; });
     try {
       final dio = ref.read(dioProvider);
-      await dio.post('/api/v1/auth/register', data: {
-        'full_name': _nameCtrl.text.trim(),
-        'email': _emailCtrl.text.trim().toLowerCase(),
-        'password': _passCtrl.text,
-      });
-      if (mounted) {
-        context.go('/verify-otp', extra: _emailCtrl.text.trim().toLowerCase());
-      }
+      await dio.post('/api/v1/auth/register', data: {'full_name': _nameCtrl.text.trim(), 'email': _emailCtrl.text.trim().toLowerCase(), 'password': _passCtrl.text});
+      if (mounted) context.go('/verify-otp', extra: _emailCtrl.text.trim().toLowerCase());
     } on DioException catch (e) {
       final msg = (e.response?.data as Map?)?['detail'] ?? 'Registration failed';
       setState(() => _error = msg.toString());
-    } catch (e) {
-      setState(() => _error = 'Something went wrong. Please try again.');
+    } catch (_) {
+      setState(() => _error = 'Something went wrong. Try again.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -58,157 +45,68 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppStyle.bg(context),
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          padding: const EdgeInsets.all(24),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              IconButton(
-                icon: Icon(Icons.arrow_back_ios_rounded, color: AppStyle.text(context)),
-                onPressed: () => context.go('/'),
-              ),
               const SizedBox(height: 24),
-
-              // Header
-              Container(
+              Row(children: [
+                IconButton(icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.text, size: 20), onPressed: () => context.go('/login')),
+              ]),
+              const SizedBox(height: 16),
+              Center(child: Container(
                 width: 80, height: 80,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  color: Colors.white,
-                  boxShadow: AppStyle.accentShadow(context, AppColors.primary),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text('Create Account', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: AppStyle.text(context), fontFamily: 'Inter', letterSpacing: -0.5)),
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), color: Colors.white,
+                  boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.18), blurRadius: 20, offset: const Offset(0, 6))]),
+                child: ClipRRect(borderRadius: BorderRadius.circular(20), child: Image.asset('assets/images/logo.png', fit: BoxFit.contain)),
+              )),
+              const SizedBox(height: 16),
+              const Center(child: Text('Create Account', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppColors.text, fontFamily: 'Inter', letterSpacing: -0.5))),
               const SizedBox(height: 6),
-              Text('Join VK OS and start your journey', style: TextStyle(fontSize: 14, color: AppStyle.textSub(context), fontFamily: 'Inter')),
-              const SizedBox(height: 36),
-
-              // Form
+              const Center(child: Text('Join VK OS', style: TextStyle(fontSize: 14, color: AppColors.textSub, fontFamily: 'Inter'))),
+              const SizedBox(height: 32),
               Form(
                 key: _formKey,
-                child: Column(
-                  children: [
-                    _buildField(context, _nameCtrl, 'Full Name', Icons.person_outline, validator: (v) => (v?.trim().isEmpty ?? true) ? 'Enter your name' : null),
-                    const SizedBox(height: 16),
-                    _buildField(context, _emailCtrl, 'Email Address', Icons.email_outlined,
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (v) {
-                        if (v?.trim().isEmpty ?? true) return 'Enter your email';
-                        if (!v!.contains('@')) return 'Enter a valid email';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    _buildField(context, _passCtrl, 'Password', Icons.lock_outline,
-                      obscure: _obscurePass,
-                      suffix: IconButton(
-                        icon: Icon(_obscurePass ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: AppStyle.textMuted(context), size: 20),
-                        onPressed: () => setState(() => _obscurePass = !_obscurePass),
-                      ),
-                      validator: (v) {
-                        if ((v?.length ?? 0) < 8) return 'Min 8 characters';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    _buildField(context, _confirmCtrl, 'Confirm Password', Icons.lock_outline,
-                      obscure: _obscureConfirm,
-                      suffix: IconButton(
-                        icon: Icon(_obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: AppStyle.textMuted(context), size: 20),
-                        onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
-                      ),
-                      validator: (v) => v != _passCtrl.text ? 'Passwords do not match' : null,
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(color: AppColors.error.withOpacity(0.10), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.error.withOpacity(0.3))),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.error_outline, color: AppColors.error, size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 13, fontFamily: 'Inter'))),
-                          ],
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 28),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: _loading ? null : _register,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          padding: EdgeInsets.zero,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                        child: Ink(
-                          decoration: BoxDecoration(
-                            gradient: AppColors.primaryGradient,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: AppStyle.accentShadow(context, AppColors.primary),
-                          ),
-                          child: Container(
-                            alignment: Alignment.center,
-                            child: _loading
-                                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                                : const Text('Create Account', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700, fontFamily: 'Inter')),
-                          ),
-                        ),
-                      ),
-                    ),
+                child: Column(children: [
+                  TextFormField(controller: _nameCtrl, style: const TextStyle(color: AppColors.text, fontFamily: 'Inter'),
+                    decoration: const InputDecoration(labelText: 'Full Name', prefixIcon: Icon(Icons.person_outline, color: AppColors.textMuted, size: 20)),
+                    validator: (v) => (v?.trim().isEmpty ?? true) ? 'Name required' : null),
+                  const SizedBox(height: 16),
+                  TextFormField(controller: _emailCtrl, keyboardType: TextInputType.emailAddress, style: const TextStyle(color: AppColors.text, fontFamily: 'Inter'),
+                    decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined, color: AppColors.textMuted, size: 20)),
+                    validator: (v) { if (v?.isEmpty ?? true) return 'Email required'; if (!v!.contains('@')) return 'Invalid email'; return null; }),
+                  const SizedBox(height: 16),
+                  TextFormField(controller: _passCtrl, obscureText: _obscure, style: const TextStyle(color: AppColors.text, fontFamily: 'Inter'),
+                    decoration: InputDecoration(labelText: 'Password', prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textMuted, size: 20),
+                      suffixIcon: IconButton(icon: Icon(_obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: AppColors.textMuted, size: 20), onPressed: () => setState(() => _obscure = !_obscure))),
+                    validator: (v) => (v?.length ?? 0) < 6 ? 'Min 6 characters' : null),
+                  const SizedBox(height: 16),
+                  TextFormField(controller: _confirmCtrl, obscureText: _obscureC, style: const TextStyle(color: AppColors.text, fontFamily: 'Inter'),
+                    decoration: InputDecoration(labelText: 'Confirm Password', prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textMuted, size: 20),
+                      suffixIcon: IconButton(icon: Icon(_obscureC ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: AppColors.textMuted, size: 20), onPressed: () => setState(() => _obscureC = !_obscureC))),
+                    validator: (v) => v != _passCtrl.text ? 'Passwords do not match' : null),
+                  if (_error != null) ...[
+                    const SizedBox(height: 12),
+                    Container(padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: AppColors.error.withOpacity(0.08), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.error.withOpacity(0.3))),
+                      child: Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 13, fontFamily: 'Inter'))),
                   ],
-                ),
+                  const SizedBox(height: 28),
+                  SizedBox(width: double.infinity, child: _loading ? const Center(child: CircularProgressIndicator(color: AppColors.primary)) : ElevatedButton(onPressed: _register, child: const Text('Create Account'))),
+                ]),
               ),
-              const SizedBox(height: 28),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('Already have an account?', style: TextStyle(color: AppStyle.textSub(context), fontFamily: 'Inter', fontSize: 14)),
-                  TextButton(
-                    onPressed: () => context.go('/login'),
-                    child: const Text('Sign In', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontFamily: 'Inter', fontSize: 14)),
-                  ),
-                ],
-              ),
+              const SizedBox(height: 20),
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                const Text('Already have an account?', style: TextStyle(color: AppColors.textSub, fontFamily: 'Inter', fontSize: 14)),
+                TextButton(onPressed: () => context.go('/login'), child: const Text('Sign In', style: TextStyle(color: AppColors.primary, fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 14))),
+              ]),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildField(BuildContext context, TextEditingController ctrl, String label, IconData icon, {
-    bool obscure = false, TextInputType? keyboardType, Widget? suffix, String? Function(String?)? validator
-  }) {
-    return TextFormField(
-      controller: ctrl,
-      obscureText: obscure,
-      keyboardType: keyboardType,
-      style: TextStyle(color: AppStyle.text(context), fontFamily: 'Inter', fontSize: 15),
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: AppStyle.textMuted(context), size: 20),
-        suffixIcon: suffix,
-        filled: true,
-        fillColor: AppStyle.card(context),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppStyle.border(context))),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppStyle.border(context))),
-        focusedBorder: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(14)), borderSide: BorderSide(color: AppColors.primary, width: 2)),
-        labelStyle: TextStyle(color: AppStyle.textSub(context), fontFamily: 'Inter'),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-      ),
-      validator: validator,
     );
   }
 }

@@ -1,167 +1,157 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
 import 'package:lifeos/presentation/providers/notes_provider.dart';
-import 'package:lifeos/presentation/widgets/animations/shimmer_loading.dart';
-import 'package:timeago/timeago.dart' as timeago;
 
 class NotesScreen extends ConsumerStatefulWidget {
   const NotesScreen({super.key});
-
   @override
   ConsumerState<NotesScreen> createState() => _NotesScreenState();
 }
 
 class _NotesScreenState extends ConsumerState<NotesScreen> {
-  bool _isGridView = true;
+  final _searchCtrl = TextEditingController();
+  bool _searching = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(notesProvider.notifier).fetchNotes());
+  }
+
+  @override
+  void dispose() { _searchCtrl.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
-    final notesAsync = ref.watch(notesProvider);
-
+    final notesState = ref.watch(notesProvider);
     return Scaffold(
-      backgroundColor: AppColors.darkBg,
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        title: const Text('Notes', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
+        title: _searching
+          ? TextField(controller: _searchCtrl, autofocus: true, style: const TextStyle(color: AppColors.text, fontFamily: 'Inter'),
+              decoration: const InputDecoration(hintText: 'Search notes...', hintStyle: TextStyle(color: AppColors.textMuted), border: InputBorder.none, fillColor: Colors.transparent),
+              onChanged: (v) => ref.read(notesProvider.notifier).fetchNotes(search: v))
+          : Row(children: [
+              Container(width: 30, height: 30, decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), color: Colors.white, boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.15), blurRadius: 6)]),
+                child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.asset('assets/images/logo.png', fit: BoxFit.contain))),
+              const SizedBox(width: 10),
+              const Text('VK OS', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, color: AppColors.text, fontSize: 20)),
+            ]),
         actions: [
-          IconButton(icon: const Icon(Icons.search), onPressed: () {}),
-          IconButton(
-            icon: Icon(_isGridView ? Icons.view_list : Icons.grid_view),
-            onPressed: () => setState(() => _isGridView = !_isGridView),
-          ),
+          IconButton(icon: Icon(_searching ? Icons.close : Icons.search_rounded, color: AppColors.text), onPressed: () { setState(() { _searching = !_searching; if (!_searching) { _searchCtrl.clear(); ref.read(notesProvider.notifier).fetchNotes(); } }); }),
+          IconButton(icon: const Icon(Icons.person_outline_rounded, color: AppColors.text), onPressed: () => context.go('/profile')),
         ],
       ),
-      body: notesAsync.when(
-        data: (notes) {
-          if (notes.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.sticky_note_2_outlined, color: AppColors.textMuted, size: 64),
-                  const SizedBox(height: 16),
-                  Text('No notes yet', style: TextStyle(color: AppColors.textSecondary, fontSize: 16, fontFamily: 'Inter')),
-                  const SizedBox(height: 8),
-                  Text('Tap + to create your first note', style: TextStyle(color: AppColors.textMuted, fontSize: 13, fontFamily: 'Inter')),
-                ],
-              ),
-            );
-          }
-          return _isGridView ? _buildGrid(notes) : _buildList(notes);
-        },
-        loading: () => ShimmerLoading(count: 8, height: 120),
-        error: (e, _) => Center(child: Text(e.toString(), style: TextStyle(color: AppColors.error))),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.go('/notes/new'),
+      body: notesState.isLoading && notesState.notes.isEmpty
+        ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+        : notesState.notes.isEmpty
+          ? _buildEmpty()
+          : _buildNotesList(notesState.notes),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async { await context.push('/notes/new'); ref.read(notesProvider.notifier).fetchNotes(); },
         backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('New Note', style: TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.w600)),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
 
-  Widget _buildGrid(List<Map<String, dynamic>> notes) {
-    final colors = [
-      AppColors.primary.withOpacity(0.15),
-      AppColors.accent.withOpacity(0.15),
-      AppColors.success.withOpacity(0.15),
-      AppColors.warning.withOpacity(0.15),
-      const Color(0xFF8B5CF6).withOpacity(0.15),
-    ];
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 0.85,
+  Widget _buildEmpty() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(width: 80, height: 80, decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), shape: BoxShape.circle),
+            child: const Icon(Icons.note_add_outlined, color: AppColors.primary, size: 40)),
+          const SizedBox(height: 16),
+          const Text('No notes yet', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.text, fontFamily: 'Inter')),
+          const SizedBox(height: 8),
+          const Text('Tap + to create your first note', style: TextStyle(fontSize: 14, color: AppColors.textSub, fontFamily: 'Inter')),
+        ],
       ),
-      itemCount: notes.length,
-      itemBuilder: (_, i) {
-        final note = notes[i];
-        return GestureDetector(
-          onTap: () => context.go('/notes/${note['id']}'),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.darkCard,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.darkBorder, width: 0.5),
-              gradient: LinearGradient(
-                colors: [AppColors.darkCard, colors[i % colors.length]],
-                begin: Alignment.topLeft, end: Alignment.bottomRight,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (note['is_pinned'] == true) ...[
-                  Icon(Icons.push_pin, color: AppColors.primary, size: 14),
-                  const SizedBox(height: 6),
-                ],
-                Text(
-                  note['title'] ?? 'Untitled',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white, fontFamily: 'Inter'),
-                  maxLines: 2, overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 6),
-                Expanded(
-                  child: Text(
-                    note['content'] ?? '',
-                    style: TextStyle(fontSize: 12, color: AppColors.textMuted, fontFamily: 'Inter', height: 1.4),
-                    maxLines: 6, overflow: TextOverflow.fade,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                if (note['updated_at'] != null)
-                  Text(
-                    timeago.format(DateTime.parse(note['updated_at'].toString())),
-                    style: TextStyle(fontSize: 10, color: AppColors.textMuted, fontFamily: 'Inter'),
-                  ),
-              ],
-            ),
-          ).animate(delay: (30 * i).ms).fadeIn().scale(begin: const Offset(0.95, 0.95)),
-        );
-      },
     );
   }
 
-  Widget _buildList(List<Map<String, dynamic>> notes) {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: notes.length,
-      itemBuilder: (_, i) {
-        final note = notes[i];
-        return GestureDetector(
-          onTap: () => context.go('/notes/${note['id']}'),
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.darkCard,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.darkBorder, width: 0.5),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(note['title'] ?? 'Untitled', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white, fontFamily: 'Inter'), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      if (note['content'] != null) ...[
-                        const SizedBox(height: 4),
-                        Text(note['content'].toString(), style: TextStyle(fontSize: 12, color: AppColors.textMuted, fontFamily: 'Inter'), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      ],
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right, color: AppColors.textMuted, size: 18),
-              ],
-            ),
-          ),
-        );
-      },
+  Widget _buildNotesList(List<Note> notes) {
+    final pinned = notes.where((n) => n.isPinned).toList();
+    final others = notes.where((n) => !n.isPinned).toList();
+    return RefreshIndicator(
+      color: AppColors.primary,
+      onRefresh: () => ref.read(notesProvider.notifier).fetchNotes(),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+        children: [
+          if (pinned.isNotEmpty) ...[
+            const Padding(padding: EdgeInsets.only(bottom: 8, top: 4), child: Text('Pinned', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textMuted, fontFamily: 'Inter', letterSpacing: 0.8))),
+            ...pinned.map((n) => _NoteCard(note: n, onTap: () async { await context.push('/notes/${n.id}/edit', extra: n); ref.read(notesProvider.notifier).fetchNotes(); }, onDelete: () => _deleteNote(n), onPin: () => ref.read(notesProvider.notifier).togglePin(n))),
+          ],
+          if (others.isNotEmpty) ...[
+            if (pinned.isNotEmpty) const Padding(padding: EdgeInsets.only(bottom: 8, top: 12), child: Text('All Notes', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textMuted, fontFamily: 'Inter', letterSpacing: 0.8))),
+            ...others.map((n) => _NoteCard(note: n, onTap: () async { await context.push('/notes/${n.id}/edit', extra: n); ref.read(notesProvider.notifier).fetchNotes(); }, onDelete: () => _deleteNote(n), onPin: () => ref.read(notesProvider.notifier).togglePin(n))),
+          ],
+        ],
+      ),
     );
+  }
+
+  void _deleteNote(Note note) async {
+    final confirm = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
+      title: const Text('Delete Note', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, color: AppColors.text)),
+      content: const Text('This note will be permanently deleted.', style: TextStyle(fontFamily: 'Inter', color: AppColors.textSub)),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel', style: TextStyle(color: AppColors.textSub))),
+        ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: AppColors.error), child: const Text('Delete')),
+      ],
+    ));
+    if (confirm == true) ref.read(notesProvider.notifier).deleteNote(note.id);
+  }
+}
+
+class _NoteCard extends StatelessWidget {
+  final Note note;
+  final VoidCallback onTap, onDelete, onPin;
+  const _NoteCard({required this.note, required this.onTap, required this.onDelete, required this.onPin});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: note.isPinned ? AppColors.primary.withOpacity(0.3) : AppColors.border),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              if (note.isPinned) const Padding(padding: EdgeInsets.only(right: 6), child: Icon(Icons.push_pin_rounded, color: AppColors.primary, size: 14)),
+              Expanded(child: Text(note.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text, fontFamily: 'Inter'), maxLines: 1, overflow: TextOverflow.ellipsis)),
+              GestureDetector(onTap: onPin, child: Icon(note.isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined, color: note.isPinned ? AppColors.primary : AppColors.textMuted, size: 18)),
+              const SizedBox(width: 8),
+              GestureDetector(onTap: onDelete, child: const Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 18)),
+            ]),
+            if (note.content.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(note.content, style: const TextStyle(fontSize: 13, color: AppColors.textSub, fontFamily: 'Inter'), maxLines: 2, overflow: TextOverflow.ellipsis),
+            ],
+            const SizedBox(height: 8),
+            Text(_formatDate(note.updatedAt), style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontFamily: 'Inter')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(String dateStr) {
+    try {
+      final dt = DateTime.parse(dateStr).toLocal();
+      return '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) { return ''; }
   }
 }
