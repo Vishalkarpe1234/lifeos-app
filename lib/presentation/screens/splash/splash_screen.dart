@@ -34,7 +34,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProvider
     if (auth.hasToken) {
       context.go('/dashboard');
     } else {
-      context.go('/login');
+      context.go('/');
     }
   }
 
@@ -133,20 +133,23 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProvider
 
   Widget _buildLogo() {
     return Container(
-      width: 96,
-      height: 96,
+      width: 120,
+      height: 120,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: AppColors.primaryGradient,
+        borderRadius: BorderRadius.circular(28),
+        color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.4),
+            color: AppColors.primary.withOpacity(0.35),
             blurRadius: 30,
-            spreadRadius: 5,
+            spreadRadius: 4,
           ),
         ],
       ),
-      child: const Icon(Icons.all_inclusive_rounded, color: Colors.white, size: 48),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
+      ),
     )
         .animate()
         .scale(begin: const Offset(0.5, 0.5), duration: 700.ms, curve: Curves.easeOutBack)
@@ -155,7 +158,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProvider
 
   Widget _buildAppName() {
     return const Text(
-      'LifeOS',
+      'VK OS',
       style: TextStyle(
         fontSize: 40,
         fontWeight: FontWeight.w800,
@@ -168,7 +171,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with TickerProvider
 
   Widget _buildTagline() {
     return Text(
-      'One App. One Life. Everything Connected.',
+      'Your Life, Organized, Intelligent.',
       style: TextStyle(
         fontSize: 13,
         color: AppColors.textSecondary,

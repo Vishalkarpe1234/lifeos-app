@@ -116,32 +116,34 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
       children: [
         AnimatedBuilder(
           animation: _pulse,
-          builder: (_, child) => Container(
-            width: 88,
-            height: 88,
+          builder: (_, __) => Container(
+            width: 130,
+            height: 130,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              gradient: const LinearGradient(
-                colors: [Color(0xFF6366F1), Color(0xFF8B5CF6), Color(0xFF4F46E5)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              borderRadius: BorderRadius.circular(32),
+              color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF6366F1).withOpacity(0.35 + _pulse.value * 0.2),
-                  blurRadius: 28 + _pulse.value * 12,
+                  color: const Color(0xFF6366F1).withOpacity(0.25 + _pulse.value * 0.18),
+                  blurRadius: 32 + _pulse.value * 14,
                   spreadRadius: 0,
+                ),
+                BoxShadow(
+                  color: Colors.white.withOpacity(0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
-            child: const Center(
-              child: Text('V∞', style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, fontFamily: 'Inter')),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(32),
+              child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
             ),
           ),
         ).animate().scale(duration: 700.ms, curve: Curves.elasticOut),
         const SizedBox(height: 20),
         const Text(
-          'VishalOS',
+          'VK OS',
           style: TextStyle(
             color: Colors.white,
             fontSize: 42,
@@ -150,15 +152,15 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
             letterSpacing: -1.5,
           ),
         ).animate().fadeIn(duration: 500.ms, delay: 200.ms).slideY(begin: 0.2, end: 0),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         const Text(
-          'Your AI Life Operating System',
+          'Your Life, Organized, Intelligent.',
           style: TextStyle(
             color: Color(0xFF9896C4),
-            fontSize: 15,
+            fontSize: 14,
             fontFamily: 'Inter',
             fontWeight: FontWeight.w400,
-            letterSpacing: 0.2,
+            letterSpacing: 0.3,
           ),
         ).animate().fadeIn(duration: 500.ms, delay: 350.ms),
       ],

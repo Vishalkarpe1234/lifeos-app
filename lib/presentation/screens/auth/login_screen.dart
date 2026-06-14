@@ -136,27 +136,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Column(
       children: [
         Container(
-          width: 76,
-          height: 76,
+          width: 110,
+          height: 110,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            gradient: AppColors.primaryGradient,
+            borderRadius: BorderRadius.circular(24),
+            color: Colors.white,
             boxShadow: [
-              BoxShadow(color: AppColors.primary.withOpacity(0.35), blurRadius: 28, spreadRadius: 2, offset: const Offset(0, 8)),
-              BoxShadow(color: AppColors.primary.withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 2)),
+              BoxShadow(color: AppColors.primary.withOpacity(0.18), blurRadius: 28, spreadRadius: 2, offset: const Offset(0, 8)),
+              BoxShadow(color: AppColors.primary.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2)),
             ],
           ),
-          child: const Icon(Icons.all_inclusive_rounded, color: Colors.white, size: 38),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
+          ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
         const Text(
-          'VK LifeOS',
+          'VK OS',
           style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: AppColors.lightText, letterSpacing: -0.8, fontFamily: 'Inter'),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Text(
-          'Vishal Karpe Professional Suite',
-          style: TextStyle(fontSize: 14, color: AppColors.lightTextSub, fontFamily: 'Inter', fontWeight: FontWeight.w400),
+          'Your Life, Organized, Intelligent.',
+          style: TextStyle(fontSize: 13, color: AppColors.lightTextSub, fontFamily: 'Inter', fontWeight: FontWeight.w400),
         ),
         if (_isAdminMode) ...[
           const SizedBox(height: 10),

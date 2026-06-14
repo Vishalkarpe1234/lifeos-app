@@ -73,18 +73,21 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
               // Header
               Container(
-                width: 56, height: 56,
+                width: 80, height: 80,
                 decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(20),
+                  color: Colors.white,
                   boxShadow: AppStyle.accentShadow(context, AppColors.primary),
                 ),
-                child: const Center(child: Text('V∞', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, fontFamily: 'Inter'))),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
+                ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
               Text('Create Account', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: AppStyle.text(context), fontFamily: 'Inter', letterSpacing: -0.5)),
               const SizedBox(height: 6),
-              Text('Join VishalOS and start your journey', style: TextStyle(fontSize: 14, color: AppStyle.textSub(context), fontFamily: 'Inter')),
+              Text('Join VK OS and start your journey', style: TextStyle(fontSize: 14, color: AppStyle.textSub(context), fontFamily: 'Inter')),
               const SizedBox(height: 36),
 
               // Form

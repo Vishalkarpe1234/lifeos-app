@@ -175,20 +175,23 @@ class _WideLayout extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 38, height: 38,
+            width: 44, height: 44,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              gradient: AppColors.primaryGradient,
-              boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+              color: Colors.white,
+              boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 3))],
             ),
-            child: const Center(child: Text('V∞', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13, fontFamily: 'Inter'))),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
+            ),
           ),
           const SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('VishalOS', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppStyle.text(context), fontFamily: 'Inter')),
-              Text('AI Life OS', style: TextStyle(fontSize: 10, color: AppStyle.textMuted(context), fontFamily: 'Inter')),
+              Text('VK OS', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppStyle.text(context), fontFamily: 'Inter')),
+              Text('Your Life OS', style: TextStyle(fontSize: 10, color: AppStyle.textMuted(context), fontFamily: 'Inter')),
             ],
           ),
         ],

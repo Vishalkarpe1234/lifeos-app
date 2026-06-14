@@ -33,7 +33,7 @@ class SettingsScreen extends ConsumerWidget {
           const SizedBox(height: 16),
           _Section('About', [
             _Tile(context, Icons.code_outlined, 'GitHub', 'github.com/vishalkarpe1234', AppColors.lightText, () => _openGithub()),
-            _Tile(context, Icons.info_outline, 'App Version', 'VK LifeOS v1.0.0', AppColors.lightTextSub, () {}),
+            _Tile(context, Icons.info_outline, 'App Version', 'VK OS v1.0.0', AppColors.lightTextSub, () {}),
             _Tile(context, Icons.shield_outlined, 'Privacy Policy', '', AppColors.lightTextSub, () {}),
           ]),
           const SizedBox(height: 16),
