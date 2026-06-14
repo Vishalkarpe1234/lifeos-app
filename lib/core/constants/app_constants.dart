@@ -4,10 +4,10 @@ class AppConstants {
   static const String appVersion = '1.0.0';
 
   // API
-  static const String defaultBaseUrl = 'http://localhost:8000';
+  static const String defaultBaseUrl = 'https://vishalos-backend.onrender.com';
   static const String apiVersion = '/api/v1';
-  static const int connectTimeout = 30000;
-  static const int receiveTimeout = 30000;
+  static const int connectTimeout = 60000;
+  static const int receiveTimeout = 60000;
 
   // Hive Boxes
   static const String settingsBox = 'settings';
