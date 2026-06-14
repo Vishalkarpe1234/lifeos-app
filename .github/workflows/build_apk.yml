@@ -1,4 +1,4 @@
-name: Build Flutter APK
+name: Build VK OS APK
 
 on:
   push:
@@ -32,13 +32,36 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Verify Flutter installation
-        run: flutter --version
-
       - name: Create local.properties
         run: |
           echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
           echo "sdk.dir=$ANDROID_HOME" >> android/local.properties
+
+      - name: Set up release keystore
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "Using stored keystore from secrets..."
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/vkos-release.jks
+            echo "storeFile=vkos-release.jks" > android/key.properties
+            echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" >> android/key.properties
+            echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
+            echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
+          else
+            echo "Generating a new release keystore for this build..."
+            keytool -genkeypair -v \
+              -keystore android/app/vkos-release.jks \
+              -keyalg RSA -keysize 2048 \
+              -validity 10000 \
+              -alias vkos \
+              -dname "CN=Vishal Karpe, OU=HiveTech, O=VK OS, L=Pune, S=Maharashtra, C=IN" \
+              -storepass VKOSApp2024 \
+              -keypass VKOSApp2024
+            echo "storeFile=vkos-release.jks" > android/key.properties
+            echo "storePassword=VKOSApp2024" >> android/key.properties
+            echo "keyAlias=vkos" >> android/key.properties
+            echo "keyPassword=VKOSApp2024" >> android/key.properties
+            echo "KEYSTORE_BASE64=$(base64 -w 0 android/app/vkos-release.jks)" >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Get Flutter dependencies
         run: flutter pub get
@@ -46,45 +69,56 @@ jobs:
       - name: Analyze code (non-blocking)
         run: flutter analyze --no-fatal-infos || true
 
-      - name: Build APK (split per ABI)
+      - name: Build release APKs (split per ABI)
         run: |
           flutter build apk --release --split-per-abi
-          echo "Build completed!"
-          ls -la build/app/outputs/flutter-apk/
+          echo "Split APKs built:"
+          ls -lh build/app/outputs/flutter-apk/
 
-      - name: Build universal APK
-        run: flutter build apk --release
+      - name: Build universal release APK
+        run: |
+          flutter build apk --release
+          echo "Universal APK built:"
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: LifeOS-APK-${{ github.run_number }}
+          name: VK-OS-APK-${{ github.run_number }}
           path: |
             build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
             build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
             build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 30
+          retention-days: 90
 
-      - name: Create GitHub Release (on main branch push)
+      - name: Create GitHub Release
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: ncipollo/release-action@v1
         with:
           tag: "v1.0.${{ github.run_number }}"
-          name: "LifeOS v1.0.${{ github.run_number }}"
+          name: "VK OS v1.0.${{ github.run_number }}"
           body: |
-            ## LifeOS APK Build
+            ## VK OS - Your Life, Organized, Intelligent.
 
-            **Install on Android:**
-            1. Download `app-arm64-v8a-release.apk` (for modern phones, 64-bit)
-            2. Or `app-armeabi-v7a-release.apk` (for older phones, 32-bit)
-            3. Enable "Install from unknown sources" in Android Settings > Security
-            4. Install the APK
-            5. Open LifeOS and configure your backend URL in Settings
+            ### Install on Android:
+            1. Download `app-arm64-v8a-release.apk` (modern phones, 64-bit — recommended)
+            2. Or `app-armeabi-v7a-release.apk` (older phones, 32-bit)
+            3. On your phone: Settings → Security → Enable **Install from unknown sources**
+            4. Open the downloaded APK and install
+            5. Backend is live at: https://vishalos-backend.onrender.com
 
-            **Backend:** Start your FastAPI backend and configure the URL in app Settings.
+            ### What's in this build:
+            - Full VK OS dashboard with productivity tracking
+            - Tasks, Notes, Journal, Goals, Habits, Finance, Health, Learning
+            - AI Chat, Voice Notes, Calendar, Contacts, Timeline
+            - Profile, Settings with logout
+            - Admin panel (admin only)
+
+            **Built with Flutter 3.32.4 | Release signed APK**
           artifacts: |
             build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
             build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
             build/app/outputs/flutter-apk/app-release.apk
           makeLatest: true
+          allowUpdates: true
           token: ${{ secrets.GITHUB_TOKEN }}
