@@ -289,12 +289,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: LoadingButton(
                 isLoading: auth.isLoading,
                 onPressed: _login,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
                 child: Text(
                   _isAdminMode ? 'Enter Admin Panel' : 'Sign In',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white, fontFamily: 'Inter'),
