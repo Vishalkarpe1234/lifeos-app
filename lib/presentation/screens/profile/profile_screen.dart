@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
 import 'package:lifeos/core/constants/app_constants.dart';
 import 'package:lifeos/presentation/providers/auth_provider.dart';
+import 'package:lifeos/presentation/providers/connect_provider.dart';
 import 'package:lifeos/services/api/api_client.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -17,6 +18,9 @@ class ProfileScreen extends ConsumerStatefulWidget {
 class _ProfileState extends ConsumerState<ProfileScreen> {
   Map<String, dynamic>? _profile;
   bool _loading = true;
+  final _username = TextEditingController();
+  final _bio = TextEditingController();
+  bool _savingConnect = false;
 
   String? _photoUrl() {
     final u = _profile?['profile_photo_url'];
@@ -26,13 +30,38 @@ class _ProfileState extends ConsumerState<ProfileScreen> {
   }
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() { super.initState(); _load(); _loadConnectProfile(); }
+
+  @override
+  void dispose() { _username.dispose(); _bio.dispose(); super.dispose(); }
 
   Future<void> _load() async {
     try {
       final r = await ref.read(dioProvider).get('/api/v1/profile/');
       setState(() { _profile = r.data; _loading = false; });
     } catch (_) { setState(() => _loading = false); }
+  }
+
+  Future<void> _loadConnectProfile() async {
+    try {
+      final r = await ref.read(connectServiceProvider).getProfile();
+      _username.text = r['username']?.toString() ?? '';
+      _bio.text = r['bio']?.toString() ?? '';
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
+  Future<void> _saveConnectProfile() async {
+    setState(() => _savingConnect = true);
+    try {
+      final username = _username.text.trim();
+      await ref.read(connectServiceProvider).updateProfile(username: username.isEmpty ? null : username, bio: _bio.text.trim());
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connect profile updated'), backgroundColor: C.success));
+    } on DioException catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(extractError(e)), backgroundColor: C.error));
+    } finally {
+      if (mounted) setState(() => _savingConnect = false);
+    }
   }
 
   Future<void> _pickPhoto() async {
@@ -111,7 +140,24 @@ class _ProfileState extends ConsumerState<ProfileScreen> {
         const SizedBox(height: 12),
         Center(child: Text(_profile?['full_name'] ?? 'User', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.text, fontFamily: 'Inter'))),
         Center(child: Text(ref.read(authProvider).email ?? '', style: const TextStyle(fontSize: 13, color: C.textSub, fontFamily: 'Inter'))),
-        const SizedBox(height: 32),
+        const SizedBox(height: 28),
+        const Text('CONNECT PROFILE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: C.textMuted, fontFamily: 'Inter', letterSpacing: 1)),
+        const SizedBox(height: 8),
+        Container(padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.border)),
+          child: Column(children: [
+            TextField(controller: _username,
+              decoration: const InputDecoration(labelText: 'Username', prefixText: '@', helperText: '3-30 characters: letters, numbers, underscore')),
+            const SizedBox(height: 12),
+            TextField(controller: _bio, maxLines: 3,
+              decoration: const InputDecoration(labelText: 'Bio', alignLabelWithHint: true)),
+            const SizedBox(height: 12),
+            SizedBox(width: double.infinity, child: ElevatedButton(
+              onPressed: _savingConnect ? null : _saveConnectProfile,
+              child: _savingConnect ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Save'),
+            )),
+          ])),
+        const SizedBox(height: 24),
         _tile(Icons.lock_outline, 'Change Password', C.primary, _changePassword),
         const Divider(height: 1, color: C.border),
         _tile(Icons.logout_rounded, 'Sign Out', C.textSub, () async {

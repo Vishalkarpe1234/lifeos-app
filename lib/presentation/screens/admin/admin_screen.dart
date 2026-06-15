@@ -21,13 +21,24 @@ class _AdminState extends ConsumerState<AdminScreen> with SingleTickerProviderSt
   final Set<int> _selected = {};
   bool _selectMode = false;
   Map<String, dynamic>? _profile;
+  Map<String, dynamic>? _connectOverview;
+  bool _loadingConnect = true;
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    _tabs = TabController(length: 4, vsync: this);
     _loadUsers();
     _loadProfile();
+    _loadConnectOverview();
+  }
+
+  Future<void> _loadConnectOverview() async {
+    setState(() => _loadingConnect = true);
+    try {
+      final r = await ref.read(dioProvider).get('/api/v1/admin/connect-overview');
+      setState(() { _connectOverview = r.data; _loadingConnect = false; });
+    } catch (_) { setState(() => _loadingConnect = false); }
   }
 
   @override
@@ -153,11 +164,12 @@ class _AdminState extends ConsumerState<AdminScreen> with SingleTickerProviderSt
           indicatorColor: C.primary, indicatorWeight: 2,
           labelStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 13),
           onTap: (_) => setState(() {}),
-          tabs: const [Tab(text: 'Dashboard'), Tab(text: 'Users'), Tab(text: 'Profile')]),
+          tabs: const [Tab(text: 'Dashboard'), Tab(text: 'Users'), Tab(text: 'Connect'), Tab(text: 'Profile')]),
       ),
       body: TabBarView(controller: _tabs, children: [
         _buildDashboard(nonAdminUsers),
         _buildUsers(nonAdminUsers),
+        _buildConnect(),
         _buildProfile(),
       ]),
     );
@@ -279,6 +291,48 @@ class _AdminState extends ConsumerState<AdminScreen> with SingleTickerProviderSt
         ),
       )),
     ]);
+  }
+
+  Widget _buildConnect() {
+    if (_loadingConnect) return const Center(child: CircularProgressIndicator());
+    final overview = _connectOverview;
+    if (overview == null) return const Center(child: Text('Failed to load', style: TextStyle(color: C.textSub, fontFamily: 'Inter')));
+    final users = List<Map<String, dynamic>>.from(overview['users'] ?? []);
+    final friendships = List<Map<String, dynamic>>.from(overview['friendships'] ?? []);
+    final usersWithUsername = users.where((u) => u['username'] != null).toList();
+    return RefreshIndicator(onRefresh: _loadConnectOverview, child: ListView(padding: const EdgeInsets.all(20), children: [
+      _statCard('Connect Users', '${usersWithUsername.length}', Icons.badge_outlined, C.primary),
+      const SizedBox(height: 12),
+      _statCard('Friendships', '${friendships.length}', Icons.people_alt_rounded, C.success),
+      const SizedBox(height: 12),
+      _statCard('Pending Requests', '${overview['pending_friend_requests'] ?? 0}', Icons.hourglass_top_rounded, C.warning),
+      const SizedBox(height: 24),
+      const Text('Users', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: C.text, fontFamily: 'Inter')),
+      const SizedBox(height: 12),
+      ...users.map((u) => Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: C.border)),
+        child: Row(children: [
+          CircleAvatar(radius: 18, backgroundColor: C.primary.withOpacity(0.12),
+            child: Text((u['email'] as String)[0].toUpperCase(), style: const TextStyle(color: C.primary, fontFamily: 'Inter', fontWeight: FontWeight.w700))),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(u['email'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.text, fontFamily: 'Inter'), overflow: TextOverflow.ellipsis),
+            Text(u['username'] != null ? '@${u['username']}' : 'No username set', style: const TextStyle(fontSize: 11, color: C.textMuted, fontFamily: 'Inter')),
+            if ((u['bio'] ?? '').toString().isNotEmpty) Text(u['bio'], style: const TextStyle(fontSize: 11, color: C.textSub, fontFamily: 'Inter'), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ])),
+          Text('${u['message_count'] ?? 0} msgs', style: const TextStyle(fontSize: 11, color: C.textMuted, fontFamily: 'Inter')),
+        ]))),
+      const SizedBox(height: 24),
+      const Text('Friendships', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: C.text, fontFamily: 'Inter')),
+      const SizedBox(height: 12),
+      if (friendships.isEmpty) const Text('No friendships yet', style: TextStyle(color: C.textSub, fontFamily: 'Inter')),
+      ...friendships.map((f) => Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: C.border)),
+        child: Row(children: [
+          Expanded(child: Text('@${f['user1_username'] ?? f['user1_id']}  ↔  @${f['user2_username'] ?? f['user2_id']}',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.text, fontFamily: 'Inter'))),
+        ]))),
+    ]));
   }
 
   Widget _buildProfile() {
