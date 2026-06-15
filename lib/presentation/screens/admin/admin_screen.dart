@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
 import 'package:lifeos/presentation/providers/auth_provider.dart';
 import 'package:lifeos/services/api/api_client.dart';
@@ -9,22 +10,23 @@ import 'package:lifeos/services/api/api_client.dart';
 class AdminScreen extends ConsumerStatefulWidget {
   const AdminScreen({super.key});
   @override
-  ConsumerState<AdminScreen> createState() => _AdminScreenState();
+  ConsumerState<AdminScreen> createState() => _AdminState();
 }
 
-class _AdminScreenState extends ConsumerState<AdminScreen> with SingleTickerProviderStateMixin {
+class _AdminState extends ConsumerState<AdminScreen> with SingleTickerProviderStateMixin {
   late final TabController _tabs;
   List<Map<String, dynamic>> _users = [];
-  List<Map<String, dynamic>> _notes = [];
   bool _loadingUsers = true;
-  bool _loadingNotes = true;
+  final Set<int> _selected = {};
+  bool _selectMode = false;
+  Map<String, dynamic>? _profile;
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
     _loadUsers();
-    _loadNotes();
+    _loadProfile();
   }
 
   @override
@@ -33,161 +35,275 @@ class _AdminScreenState extends ConsumerState<AdminScreen> with SingleTickerProv
   Future<void> _loadUsers() async {
     setState(() => _loadingUsers = true);
     try {
-      final dio = ref.read(dioProvider);
-      final res = await dio.get('/api/v1/admin/users');
-      if (mounted) setState(() { _users = List<Map<String, dynamic>>.from(res.data['items']); _loadingUsers = false; });
-    } catch (_) { if (mounted) setState(() => _loadingUsers = false); }
+      final r = await ref.read(dioProvider).get('/api/v1/admin/users');
+      setState(() { _users = List<Map<String, dynamic>>.from(r.data['items']); _loadingUsers = false; });
+    } catch (_) { setState(() => _loadingUsers = false); }
   }
 
-  Future<void> _loadNotes() async {
-    setState(() => _loadingNotes = true);
+  Future<void> _loadProfile() async {
     try {
-      final dio = ref.read(dioProvider);
-      final res = await dio.get('/api/v1/admin/all-notes');
-      if (mounted) setState(() { _notes = List<Map<String, dynamic>>.from(res.data['items']); _loadingNotes = false; });
-    } catch (_) { if (mounted) setState(() => _loadingNotes = false); }
+      final r = await ref.read(dioProvider).get('/api/v1/profile/');
+      setState(() => _profile = r.data);
+    } catch (_) {}
   }
 
-  Future<void> _deleteUser(Map<String, dynamic> user) async {
-    final confirm = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
-      title: const Text('Delete User', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, color: AppColors.error)),
-      content: Text('Delete user ${user['email']}? All their notes will also be deleted.', style: const TextStyle(fontFamily: 'Inter', color: AppColors.textSub, fontSize: 13)),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel', style: TextStyle(color: AppColors.textSub))),
-        ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: AppColors.error), onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
-      ],
+  Future<void> _deleteUser(int id) async {
+    try { await ref.read(dioProvider).delete('/api/v1/admin/users/$id'); _loadUsers(); }
+    catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: C.error)); }
+  }
+
+  Future<void> _bulkDelete() async {
+    if (_selected.isEmpty) return;
+    final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
+      title: const Text('Delete Users', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, color: C.error)),
+      content: Text('Delete ${_selected.length} selected user(s)? Their notes will also be deleted.', style: const TextStyle(fontFamily: 'Inter', color: C.textSub, fontSize: 13)),
+      actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+        ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: C.error), onPressed: () => Navigator.pop(context, true), child: const Text('Delete All'))],
     ));
-    if (confirm == true) {
-      try { final dio = ref.read(dioProvider); await dio.delete('/api/v1/admin/users/${user['id']}'); _loadUsers(); _loadNotes(); }
-      catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error)); }
+    if (ok == true) {
+      try {
+        await ref.read(dioProvider).post('/api/v1/admin/users/bulk-delete', data: {'user_ids': _selected.toList()});
+        setState(() { _selected.clear(); _selectMode = false; });
+        _loadUsers();
+      } catch (_) {}
     }
   }
 
-  Future<void> _addUser() async {
-    final emailCtrl = TextEditingController();
-    final passCtrl = TextEditingController();
+  Future<void> _pickAdminPhoto() async {
+    final img = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (img == null || !mounted) return;
+    try {
+      final form = FormData.fromMap({'file': await MultipartFile.fromFile(img.path, filename: 'photo.jpg')});
+      await ref.read(dioProvider).post('/api/v1/profile/photo', data: form, options: Options(contentType: 'multipart/form-data'));
+      _loadProfile();
+    } catch (_) {}
+  }
+
+  Future<void> _changeAdminPassword() async {
+    final curr = TextEditingController();
+    final nw = TextEditingController();
     await showDialog(context: context, builder: (_) => AlertDialog(
-      title: const Text('Add User', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, color: AppColors.text)),
+      title: const Text('Change Password', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: emailCtrl, keyboardType: TextInputType.emailAddress, style: const TextStyle(color: AppColors.text, fontFamily: 'Inter'), decoration: const InputDecoration(labelText: 'Email')),
+        TextField(controller: curr, obscureText: true, decoration: const InputDecoration(labelText: 'Current Password')),
         const SizedBox(height: 12),
-        TextField(controller: passCtrl, obscureText: true, style: const TextStyle(color: AppColors.text, fontFamily: 'Inter'), decoration: const InputDecoration(labelText: 'Password')),
+        TextField(controller: nw, obscureText: true, decoration: const InputDecoration(labelText: 'New Password')),
       ]),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: AppColors.textSub))),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
         ElevatedButton(onPressed: () async {
           try {
-            final dio = ref.read(dioProvider);
-            await dio.post('/api/v1/admin/users', data: {'email': emailCtrl.text.trim(), 'password': passCtrl.text, 'is_admin': false});
-            if (context.mounted) { Navigator.pop(context); _loadUsers(); }
-          } catch (e) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error)); }
-        }, child: const Text('Add')),
+            await ref.read(dioProvider).patch('/api/v1/admin/profile/password', data: {'current_password': curr.text, 'new_password': nw.text});
+            if (context.mounted) { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password changed!'), backgroundColor: C.success)); }
+          } on DioException catch (e) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(extractError(e)), backgroundColor: C.error)); }
+        }, child: const Text('Change')),
       ],
     ));
   }
 
-  Future<void> _deleteNote(Map<String, dynamic> note) async {
-    try {
-      final dio = ref.read(dioProvider);
-      await dio.delete('/api/v1/notes/${note['id']}');
-      setState(() => _notes.removeWhere((n) => n['id'] == note['id']));
-    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error)); }
-  }
-
-  Future<void> _logout() async {
-    await ref.read(authStateProvider.notifier).logout();
-    if (mounted) context.go('/login');
+  Future<void> _changeAdminEmail() async {
+    final email = TextEditingController(text: ref.read(authProvider).email ?? '');
+    final pass = TextEditingController();
+    await showDialog(context: context, builder: (_) => AlertDialog(
+      title: const Text('Change Email', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'New Email')),
+        const SizedBox(height: 12),
+        TextField(controller: pass, obscureText: true, decoration: const InputDecoration(labelText: 'Current Password')),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        ElevatedButton(onPressed: () async {
+          try {
+            await ref.read(dioProvider).patch('/api/v1/admin/profile/email', data: {'new_email': email.text.trim(), 'current_password': pass.text});
+            if (context.mounted) { Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Email changed! Please re-login.'), backgroundColor: C.success)); await ref.read(authProvider.notifier).logout(); context.go('/login'); }
+          } on DioException catch (e) { if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(extractError(e)), backgroundColor: C.error)); }
+        }, child: const Text('Change')),
+      ],
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
+    final nonAdminUsers = _users.where((u) => u['is_admin'] != true).toList();
     return Scaffold(
-      backgroundColor: AppColors.bg,
       appBar: AppBar(
         title: Row(children: [
-          Container(width: 28, height: 28, decoration: BoxDecoration(borderRadius: BorderRadius.circular(7), color: Colors.white, boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.15), blurRadius: 6)]),
+          Container(width: 26, height: 26, decoration: BoxDecoration(borderRadius: BorderRadius.circular(7), color: C.bg),
             child: ClipRRect(borderRadius: BorderRadius.circular(7), child: Image.asset('assets/images/logo.png', fit: BoxFit.contain))),
           const SizedBox(width: 8),
-          const Text('Admin Panel', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, color: AppColors.text, fontSize: 18)),
+          const Text('Admin Panel'),
         ]),
-        actions: [IconButton(icon: const Icon(Icons.logout_rounded, color: AppColors.error), onPressed: _logout, tooltip: 'Sign Out')],
-        bottom: TabBar(controller: _tabs, labelColor: AppColors.primary, unselectedLabelColor: AppColors.textMuted, indicatorColor: AppColors.primary, labelStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700), tabs: const [Tab(text: 'Users'), Tab(text: 'All Notes')]),
+        actions: [
+          if (_tabs.index == 1 && _selectMode && _selected.isNotEmpty)
+            TextButton.icon(onPressed: _bulkDelete, icon: const Icon(Icons.delete_sweep_rounded, color: C.error, size: 18), label: Text('Delete (${_selected.length})', style: const TextStyle(color: C.error, fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 13))),
+          IconButton(icon: const Icon(Icons.logout_rounded, color: C.error), onPressed: () async {
+            await ref.read(authProvider.notifier).logout();
+            if (mounted) context.go('/login');
+          }),
+        ],
+        bottom: TabBar(controller: _tabs,
+          labelColor: C.primary, unselectedLabelColor: C.textMuted,
+          indicatorColor: C.primary, indicatorWeight: 2,
+          labelStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 13),
+          onTap: (_) => setState(() {}),
+          tabs: const [Tab(text: 'Dashboard'), Tab(text: 'Users'), Tab(text: 'Profile')]),
       ),
-      body: TabBarView(controller: _tabs, children: [_buildUsersTab(), _buildNotesTab()]),
-      floatingActionButton: ListenableBuilder(
-        listenable: _tabs,
-        builder: (_, __) => _tabs.index == 0 ? FloatingActionButton(onPressed: _addUser, backgroundColor: AppColors.primary, child: const Icon(Icons.person_add_rounded, color: Colors.white)) : const SizedBox.shrink(),
-      ),
+      body: TabBarView(controller: _tabs, children: [
+        _buildDashboard(nonAdminUsers),
+        _buildUsers(nonAdminUsers),
+        _buildProfile(),
+      ]),
     );
   }
 
-  Widget _buildUsersTab() {
-    if (_loadingUsers) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-    return RefreshIndicator(color: AppColors.primary, onRefresh: _loadUsers, child: ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _users.length,
-      itemBuilder: (_, i) {
-        final u = _users[i];
-        final lastLogin = u['last_login'];
-        return Container(margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6)]),
-          child: Row(children: [
-            CircleAvatar(radius: 20, backgroundColor: u['is_admin'] == true ? AppColors.primary : AppColors.primary.withOpacity(0.15),
-              child: Text((u['email'] as String? ?? 'U')[0].toUpperCase(), style: TextStyle(color: u['is_admin'] == true ? Colors.white : AppColors.primary, fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 16))),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Expanded(child: Text(u['email'] ?? '', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text, fontFamily: 'Inter'), overflow: TextOverflow.ellipsis)),
-                if (u['is_admin'] == true) Container(margin: const EdgeInsets.only(left: 6), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)), child: const Text('Admin', style: TextStyle(fontSize: 10, color: AppColors.primary, fontFamily: 'Inter', fontWeight: FontWeight.w700))),
-              ]),
-              const SizedBox(height: 2),
-              Row(children: [
-                Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: u['is_active'] == true ? AppColors.success : AppColors.error)),
-                const SizedBox(width: 4),
-                Text(u['is_active'] == true ? 'Active' : 'Inactive', style: TextStyle(fontSize: 11, color: u['is_active'] == true ? AppColors.success : AppColors.error, fontFamily: 'Inter')),
-                if (lastLogin != null) ...[
-                  const SizedBox(width: 8),
-                  Text('Last: ${_formatDate(lastLogin.toString())}', style: const TextStyle(fontSize: 10, color: AppColors.textMuted, fontFamily: 'Inter')),
-                ],
-              ]),
-            ])),
-            if (u['is_admin'] != true) IconButton(icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 20), onPressed: () => _deleteUser(u)),
-          ]),
-        );
-      },
-    ));
+  Widget _buildDashboard(List<Map<String, dynamic>> users) {
+    final totalNotes = users.fold(0, (sum, u) => sum + (u['note_count'] as int? ?? 0));
+    final activeUsers = users.where((u) => u['is_active'] == true).length;
+    return RefreshIndicator(onRefresh: _loadUsers, child: ListView(padding: const EdgeInsets.all(20), children: [
+      _statCard('Total Users', '${users.length}', Icons.people_rounded, C.primary),
+      const SizedBox(height: 12),
+      _statCard('Active Users', '$activeUsers', Icons.check_circle_outline_rounded, C.success),
+      const SizedBox(height: 12),
+      _statCard('Total Notes', '$totalNotes', Icons.note_rounded, C.warning),
+      const SizedBox(height: 24),
+      const Text('Recent Users', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: C.text, fontFamily: 'Inter')),
+      const SizedBox(height: 12),
+      ...users.take(5).map((u) => Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: C.border)),
+        child: Row(children: [
+          CircleAvatar(radius: 18, backgroundColor: C.primary.withOpacity(0.12),
+            child: Text((u['email'] as String)[0].toUpperCase(), style: const TextStyle(color: C.primary, fontFamily: 'Inter', fontWeight: FontWeight.w700))),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(u['email'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.text, fontFamily: 'Inter'), overflow: TextOverflow.ellipsis),
+            Text('${u['note_count'] ?? 0} notes', style: const TextStyle(fontSize: 11, color: C.textMuted, fontFamily: 'Inter')),
+          ])),
+          Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: u['is_active'] == true ? C.success : C.error)),
+        ]))),
+    ]));
   }
 
-  Widget _buildNotesTab() {
-    if (_loadingNotes) return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-    return RefreshIndicator(color: AppColors.primary, onRefresh: _loadNotes, child: ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _notes.length,
-      itemBuilder: (_, i) {
-        final n = _notes[i];
-        return Container(margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(child: Text(n['title'] ?? '', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text, fontFamily: 'Inter'), maxLines: 1, overflow: TextOverflow.ellipsis)),
-              IconButton(padding: EdgeInsets.zero, constraints: const BoxConstraints(), icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 18), onPressed: () => _deleteNote(n)),
-            ]),
-            const SizedBox(height: 2),
-            Text('By: ${n['user_email'] ?? 'unknown'}', style: const TextStyle(fontSize: 11, color: AppColors.primary, fontFamily: 'Inter', fontWeight: FontWeight.w500)),
-            if ((n['content'] ?? '').isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(n['content'] ?? '', style: const TextStyle(fontSize: 12, color: AppColors.textSub, fontFamily: 'Inter'), maxLines: 2, overflow: TextOverflow.ellipsis),
-            ],
-            const SizedBox(height: 4),
-            Text(_formatDate(n['created_at'] ?? ''), style: const TextStyle(fontSize: 10, color: AppColors.textMuted, fontFamily: 'Inter')),
-          ]),
-        );
-      },
-    ));
+  Widget _statCard(String label, String value, IconData icon, Color color) {
+    return Container(padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: C.border)),
+      child: Row(children: [
+        Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+          child: Icon(icon, color: color, size: 24)),
+        const SizedBox(width: 16),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(value, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: color, fontFamily: 'Inter')),
+          Text(label, style: const TextStyle(fontSize: 13, color: C.textSub, fontFamily: 'Inter')),
+        ]),
+      ]));
   }
 
-  String _formatDate(String dateStr) {
-    try { final dt = DateTime.parse(dateStr).toLocal(); return '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}'; }
-    catch (_) { return dateStr.length > 10 ? dateStr.substring(0, 10) : dateStr; }
+  Widget _buildUsers(List<Map<String, dynamic>> users) {
+    return Column(children: [
+      Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        color: Colors.white,
+        child: Row(children: [
+          Checkbox(value: _selectMode && _selected.length == users.length && users.isNotEmpty,
+            onChanged: (v) {
+              setState(() {
+                _selectMode = true;
+                if (v == true) _selected.addAll(users.map((u) => u['id'] as int));
+                else { _selected.clear(); _selectMode = false; }
+              });
+            }),
+          const Text('Select All', style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: C.textSub)),
+          const Spacer(),
+          Text('${users.length} users', style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: C.textMuted)),
+        ])),
+      const Divider(height: 1, color: C.border),
+      Expanded(child: RefreshIndicator(onRefresh: _loadUsers,
+        child: _loadingUsers ? const Center(child: CircularProgressIndicator()) :
+        users.isEmpty ? const Center(child: Text('No users yet', style: TextStyle(color: C.textSub, fontFamily: 'Inter'))) :
+        ListView.separated(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          itemCount: users.length,
+          separatorBuilder: (_, __) => const Divider(height: 1, color: C.border, indent: 60),
+          itemBuilder: (_, i) {
+            final u = users[i];
+            final id = u['id'] as int;
+            final isSelected = _selected.contains(id);
+            return ListTile(
+              leading: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (_selectMode) Checkbox(value: isSelected, onChanged: (v) { setState(() { v == true ? _selected.add(id) : _selected.remove(id); }); })
+                else const SizedBox(width: 4),
+                CircleAvatar(radius: 18, backgroundColor: C.primary.withOpacity(0.12),
+                  child: Text((u['email'] as String)[0].toUpperCase(), style: const TextStyle(color: C.primary, fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 14))),
+              ]),
+              title: Text(u['email'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.text, fontFamily: 'Inter'), overflow: TextOverflow.ellipsis),
+              subtitle: Text('${u['note_count'] ?? 0} notes • ${u['is_active'] == true ? 'Active' : 'Inactive'} • Last: ${_lastLogin(u['last_login'])}',
+                style: const TextStyle(fontSize: 11, color: C.textMuted, fontFamily: 'Inter')),
+              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                IconButton(icon: const Icon(Icons.edit_outlined, size: 18, color: C.primary), onPressed: () => context.push('/admin/users/$id', extra: u)),
+                IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 18, color: C.error), onPressed: () async {
+                  final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
+                    title: const Text('Delete User', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, color: C.error)),
+                    content: Text('Delete ${u['email']}?', style: const TextStyle(fontFamily: 'Inter', color: C.textSub)),
+                    actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                      ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: C.error), onPressed: () => Navigator.pop(context, true), child: const Text('Delete'))],
+                  ));
+                  if (ok == true) _deleteUser(id);
+                }),
+              ]),
+              onTap: () {
+                if (_selectMode) { setState(() { isSelected ? _selected.remove(id) : _selected.add(id); }); }
+                else { context.push('/admin/users/$id', extra: u); }
+              },
+              onLongPress: () { setState(() { _selectMode = true; _selected.add(id); }); },
+            );
+          },
+        ),
+      )),
+    ]);
+  }
+
+  Widget _buildProfile() {
+    return ListView(padding: const EdgeInsets.all(20), children: [
+      Center(child: Stack(children: [
+        CircleAvatar(radius: 52, backgroundColor: C.primary.withOpacity(0.1),
+          backgroundImage: _profile?['profile_photo_url'] != null ? NetworkImage(_profile!['profile_photo_url']) : null,
+          child: _profile?['profile_photo_url'] == null ? const Icon(Icons.admin_panel_settings_rounded, color: C.primary, size: 48) : null),
+        Positioned(bottom: 0, right: 0, child: GestureDetector(onTap: _pickAdminPhoto,
+          child: Container(padding: const EdgeInsets.all(8), decoration: const BoxDecoration(color: C.primary, shape: BoxShape.circle),
+            child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16)))),
+      ])),
+      const SizedBox(height: 12),
+      const Center(child: Text('Administrator', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: C.text, fontFamily: 'Inter'))),
+      Center(child: Text(ref.read(authProvider).email ?? '', style: const TextStyle(fontSize: 13, color: C.textSub, fontFamily: 'Inter'))),
+      const SizedBox(height: 32),
+      _adminTile(Icons.lock_outline, 'Change Password', _changeAdminPassword),
+      const Divider(height: 1, color: C.border),
+      _adminTile(Icons.email_outlined, 'Change Email', _changeAdminEmail),
+      const Divider(height: 1, color: C.border),
+      ListTile(
+        leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: C.error.withOpacity(0.08), borderRadius: BorderRadius.circular(10)),
+          child: const Icon(Icons.logout_rounded, color: C.error, size: 18)),
+        title: const Text('Sign Out', style: TextStyle(color: C.error, fontFamily: 'Inter', fontWeight: FontWeight.w500, fontSize: 14)),
+        trailing: const Icon(Icons.chevron_right, color: C.textMuted, size: 18),
+        onTap: () async { await ref.read(authProvider.notifier).logout(); if (mounted) context.go('/login'); },
+      ),
+    ]);
+  }
+
+  Widget _adminTile(IconData icon, String label, VoidCallback onTap) {
+    return ListTile(
+      leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: C.primary.withOpacity(0.08), borderRadius: BorderRadius.circular(10)),
+        child: Icon(icon, color: C.primary, size: 18)),
+      title: Text(label, style: const TextStyle(color: C.text, fontFamily: 'Inter', fontWeight: FontWeight.w500, fontSize: 14)),
+      trailing: const Icon(Icons.chevron_right, color: C.textMuted, size: 18),
+      onTap: onTap,
+    );
+  }
+
+  String _lastLogin(String? s) {
+    if (s == null || s == 'None' || s.isEmpty) return 'Never';
+    try {
+      final dt = DateTime.parse(s).toLocal();
+      return '${dt.day}/${dt.month}/${dt.year}';
+    } catch (_) { return 'Unknown'; }
   }
 }

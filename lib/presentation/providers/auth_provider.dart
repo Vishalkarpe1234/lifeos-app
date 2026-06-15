@@ -4,105 +4,57 @@ import 'package:dio/dio.dart';
 import 'package:lifeos/core/constants/app_constants.dart';
 
 class AuthState {
-  final String? accessToken;
-  final String? userEmail;
+  final String? token;
+  final String? email;
   final bool isAdmin;
-  final bool isLoading;
+  final bool loading;
   final String? error;
-
-  const AuthState({
-    this.accessToken,
-    this.userEmail,
-    this.isAdmin = false,
-    this.isLoading = false,
-    this.error,
-  });
-
-  bool get hasToken => accessToken != null && accessToken!.isNotEmpty;
-
-  AuthState copyWith({
-    String? accessToken,
-    String? userEmail,
-    bool? isAdmin,
-    bool? isLoading,
-    String? error,
-    bool clearError = false,
-    bool clearToken = false,
-  }) {
-    return AuthState(
-      accessToken: clearToken ? null : (accessToken ?? this.accessToken),
-      userEmail: userEmail ?? this.userEmail,
-      isAdmin: isAdmin ?? this.isAdmin,
-      isLoading: isLoading ?? this.isLoading,
-      error: clearError ? null : (error ?? this.error),
-    );
-  }
+  const AuthState({this.token, this.email, this.isAdmin = false, this.loading = false, this.error});
+  bool get loggedIn => token != null;
+  AuthState copyWith({String? token, String? email, bool? isAdmin, bool? loading, String? error, bool clearToken = false, bool clearErr = false}) =>
+    AuthState(token: clearToken ? null : (token ?? this.token), email: email ?? this.email,
+      isAdmin: isAdmin ?? this.isAdmin, loading: loading ?? this.loading,
+      error: clearErr ? null : (error ?? this.error));
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  final _storage = const FlutterSecureStorage();
+  final _s = const FlutterSecureStorage();
+  AuthNotifier() : super(const AuthState()) { _load(); }
 
-  AuthNotifier() : super(const AuthState()) {
-    _loadToken();
+  Future<void> _load() async {
+    final t = await _s.read(key: AppConstants.keyToken);
+    final e = await _s.read(key: AppConstants.keyEmail);
+    final a = await _s.read(key: AppConstants.keyIsAdmin);
+    if (t != null) state = AuthState(token: t, email: e, isAdmin: a == 'true');
   }
 
-  Future<void> _loadToken() async {
-    final token = await _storage.read(key: AppConstants.keyAccessToken);
-    final email = await _storage.read(key: AppConstants.keyUserEmail);
-    final isAdmin = await _storage.read(key: 'is_admin');
-    if (token != null) {
-      state = state.copyWith(accessToken: token, userEmail: email, isAdmin: isAdmin == 'true');
-    }
-  }
-
-  Future<bool> login(String email, String password, String baseUrl) async {
-    state = state.copyWith(isLoading: true, clearError: true);
+  Future<bool> login(String email, String password) async {
+    state = state.copyWith(loading: true, clearErr: true);
     try {
-      final dio = Dio(BaseOptions(baseUrl: baseUrl));
-      final response = await dio.post('/api/v1/auth/login', data: {'email': email, 'password': password});
-      final token = response.data['access_token'];
-      final refresh = response.data['refresh_token'];
-      await _storage.write(key: AppConstants.keyAccessToken, value: token);
-      await _storage.write(key: AppConstants.keyRefreshToken, value: refresh);
-      await _storage.write(key: AppConstants.keyUserEmail, value: email);
-      await _storage.write(key: AppConstants.keyBaseUrl, value: baseUrl);
-
-      final meResp = await dio.get('/api/v1/auth/me', options: Options(headers: {'Authorization': 'Bearer $token'}));
-      final isAdmin = meResp.data['is_admin'] ?? false;
-      await _storage.write(key: 'is_admin', value: isAdmin.toString());
-      state = state.copyWith(accessToken: token, userEmail: email, isAdmin: isAdmin, isLoading: false);
+      final dio = Dio(BaseOptions(baseUrl: AppConstants.baseUrl));
+      final r = await dio.post('/api/v1/auth/login', data: {'email': email.trim().toLowerCase(), 'password': password});
+      final token = r.data['access_token'] as String;
+      final refresh = r.data['refresh_token'] as String;
+      final me = await dio.get('/api/v1/auth/me', options: Options(headers: {'Authorization': 'Bearer $token'}));
+      final isAdmin = me.data['is_admin'] == true;
+      await _s.write(key: AppConstants.keyToken, value: token);
+      await _s.write(key: AppConstants.keyRefresh, value: refresh);
+      await _s.write(key: AppConstants.keyEmail, value: email.trim().toLowerCase());
+      await _s.write(key: AppConstants.keyIsAdmin, value: isAdmin.toString());
+      state = AuthState(token: token, email: email.trim().toLowerCase(), isAdmin: isAdmin);
       return true;
     } on DioException catch (e) {
-      final msg = e.response?.data?['detail'] ?? 'Login failed';
-      state = state.copyWith(isLoading: false, error: msg);
-      return false;
-    }
-  }
-
-  Future<bool> loginWithPIN(String email, String pin, String baseUrl) async {
-    state = state.copyWith(isLoading: true, clearError: true);
-    try {
-      final dio = Dio(BaseOptions(baseUrl: baseUrl));
-      final response = await dio.post('/api/v1/auth/login/pin', data: {'email': email, 'pin': pin});
-      final token = response.data['access_token'];
-      await _storage.write(key: AppConstants.keyAccessToken, value: token);
-      await _storage.write(key: AppConstants.keyRefreshToken, value: response.data['refresh_token']);
-      state = state.copyWith(accessToken: token, userEmail: email, isLoading: false);
-      return true;
-    } on DioException catch (e) {
-      state = state.copyWith(isLoading: false, error: e.response?.data?['detail'] ?? 'PIN login failed');
+      String msg = 'Login failed';
+      try { msg = (e.response?.data as Map)['detail']?.toString() ?? msg; } catch (_) {}
+      state = state.copyWith(loading: false, error: msg);
       return false;
     }
   }
 
   Future<void> logout() async {
-    await _storage.delete(key: AppConstants.keyAccessToken);
-    await _storage.delete(key: AppConstants.keyRefreshToken);
-    await _storage.delete(key: 'is_admin');
+    await _s.deleteAll();
     state = const AuthState();
   }
-
-  void clearError() => state = state.copyWith(clearError: true);
 }
 
-final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) => AuthNotifier());
+final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) => AuthNotifier());

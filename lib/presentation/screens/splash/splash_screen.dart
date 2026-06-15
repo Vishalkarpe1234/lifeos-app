@@ -7,50 +7,40 @@ import 'package:lifeos/presentation/providers/auth_provider.dart';
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
   @override
-  ConsumerState<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashState();
 }
 
-class _SplashScreenState extends ConsumerState<SplashScreen> {
+class _SplashState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(milliseconds: 1800), _navigate);
+    Future.delayed(const Duration(milliseconds: 1500), _go);
   }
 
-  void _navigate() {
+  void _go() {
     if (!mounted) return;
-    final auth = ref.read(authStateProvider);
-    if (auth.hasToken) {
-      context.go(auth.isAdmin ? '/admin' : '/notes');
-    } else {
-      context.go('/login');
-    }
+    final auth = ref.read(authProvider);
+    if (auth.loggedIn) { context.go(auth.isAdmin ? '/admin' : '/notes'); }
+    else { context.go('/login'); }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.primary,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 110, height: 110,
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(28), color: Colors.white,
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 30, spreadRadius: 4)]),
-              child: ClipRRect(borderRadius: BorderRadius.circular(28),
-                child: Image.asset('assets/images/logo.png', fit: BoxFit.contain)),
-            ),
-            const SizedBox(height: 24),
-            const Text('VK OS', style: TextStyle(fontSize: 38, fontWeight: FontWeight.w900, color: Colors.white, fontFamily: 'Inter', letterSpacing: -1.5)),
-            const SizedBox(height: 8),
-            Text('Your Life, Organized, Intelligent.', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.75), fontFamily: 'Inter')),
-            const SizedBox(height: 60),
-            SizedBox(width: 180, child: LinearProgressIndicator(backgroundColor: Colors.white.withOpacity(0.2), valueColor: const AlwaysStoppedAnimation<Color>(Colors.white), minHeight: 2)),
-          ],
-        ),
-      ),
+      backgroundColor: C.primary,
+      body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Container(width: 100, height: 100,
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24),
+            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 30, offset: const Offset(0, 8))]),
+          child: ClipRRect(borderRadius: BorderRadius.circular(24),
+            child: Image.asset('assets/images/logo.png', fit: BoxFit.contain))),
+        const SizedBox(height: 20),
+        const Text('VK OS', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: Colors.white, fontFamily: 'Inter', letterSpacing: -1)),
+        const SizedBox(height: 6),
+        Text('Your Life, Organized.', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.7), fontFamily: 'Inter')),
+        const SizedBox(height: 50),
+        const SizedBox(width: 40, child: LinearProgressIndicator(color: Colors.white, backgroundColor: Color(0x33FFFFFF), minHeight: 2)),
+      ])),
     );
   }
 }
