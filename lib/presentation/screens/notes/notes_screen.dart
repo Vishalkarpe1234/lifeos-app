@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
 import 'package:lifeos/presentation/providers/notes_provider.dart';
+import 'package:lifeos/services/location_service.dart';
+import 'package:lifeos/services/api/api_client.dart';
 
 class NotesScreen extends ConsumerStatefulWidget {
   const NotesScreen({super.key});
@@ -13,11 +15,30 @@ class NotesScreen extends ConsumerStatefulWidget {
 class _NotesState extends ConsumerState<NotesScreen> {
   final _search = TextEditingController();
   bool _searching = false;
+  bool _showLocationBanner = false;
+  bool _locationChecked = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => ref.read(notesProvider.notifier).fetch());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(notesProvider.notifier).fetch();
+      _checkLocationBanner();
+    });
+  }
+
+  Future<void> _checkLocationBanner() async {
+    final granted = await LocationService.isPermissionGrantedLocally();
+    if (!granted && mounted) {
+      setState(() { _showLocationBanner = true; });
+      // Start periodic tracking if already granted at OS level
+      final dio = ref.read(dioProvider);
+      LocationService.startPeriodicTracking(dio);
+    } else if (granted) {
+      final dio = ref.read(dioProvider);
+      LocationService.sendLocation(dio);
+      LocationService.startPeriodicTracking(dio);
+    }
   }
 
   @override
@@ -47,17 +68,20 @@ class _NotesState extends ConsumerState<NotesScreen> {
           IconButton(icon: const Icon(Icons.person_outline_rounded), onPressed: () => context.push('/profile')),
         ],
       ),
-      body: notes.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(Icons.error_outline, color: C.error, size: 40),
-          const SizedBox(height: 12),
-          Text(e.toString(), textAlign: TextAlign.center, style: const TextStyle(color: C.textSub, fontFamily: 'Inter')),
-          const SizedBox(height: 16),
-          ElevatedButton(onPressed: () => ref.read(notesProvider.notifier).fetch(), child: const Text('Retry')),
-        ])),
-        data: (list) => list.isEmpty ? _emptyState() : _buildList(list),
-      ),
+      body: Column(children: [
+        if (_showLocationBanner) _buildLocationBanner(),
+        Expanded(child: notes.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            const Icon(Icons.error_outline, color: C.error, size: 40),
+            const SizedBox(height: 12),
+            Text(e.toString(), textAlign: TextAlign.center, style: const TextStyle(color: C.textSub, fontFamily: 'Inter')),
+            const SizedBox(height: 16),
+            ElevatedButton(onPressed: () => ref.read(notesProvider.notifier).fetch(), child: const Text('Retry')),
+          ])),
+          data: (list) => list.isEmpty ? _emptyState() : _buildList(list),
+        )),
+      ]),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           await context.push('/notes/new');
@@ -68,6 +92,42 @@ class _NotesState extends ConsumerState<NotesScreen> {
         backgroundColor: C.primary,
         foregroundColor: Colors.white,
       ),
+    );
+  }
+
+  Widget _buildLocationBanner() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: C.primary.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: C.primary.withOpacity(0.3)),
+      ),
+      child: Row(children: [
+        const Icon(Icons.security_rounded, color: C.primary, size: 22),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Family Safety', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.text, fontFamily: 'Inter')),
+          const Text('Allow location access to enable family safety features', style: TextStyle(fontSize: 12, color: C.textSub, fontFamily: 'Inter')),
+        ])),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: () async {
+            final dio = ref.read(dioProvider);
+            final ok = await LocationService.requestAndGrant(dio);
+            if (ok && mounted) setState(() => _showLocationBanner = false);
+          },
+          style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+          child: const Text('Allow', style: TextStyle(fontSize: 12, fontFamily: 'Inter', fontWeight: FontWeight.w700)),
+        ),
+        IconButton(
+          padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+          icon: const Icon(Icons.close, size: 16, color: C.textMuted),
+          onPressed: () => setState(() => _showLocationBanner = false),
+        ),
+      ]),
     );
   }
 

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
+import 'package:lifeos/core/constants/app_constants.dart';
 import 'package:lifeos/presentation/providers/auth_provider.dart';
 import 'package:lifeos/services/api/api_client.dart';
 
@@ -45,6 +46,11 @@ class _AdminState extends ConsumerState<AdminScreen> with SingleTickerProviderSt
       final r = await ref.read(dioProvider).get('/api/v1/profile/');
       setState(() => _profile = r.data);
     } catch (_) {}
+  }
+
+  String _adminPhotoUrl() {
+    final u = _profile!['profile_photo_url'].toString();
+    return u.startsWith('http') ? u : '${AppConstants.baseUrl}$u';
   }
 
   Future<void> _deleteUser(int id) async {
@@ -235,9 +241,23 @@ class _AdminState extends ConsumerState<AdminScreen> with SingleTickerProviderSt
                   child: Text((u['email'] as String)[0].toUpperCase(), style: const TextStyle(color: C.primary, fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 14))),
               ]),
               title: Text(u['email'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.text, fontFamily: 'Inter'), overflow: TextOverflow.ellipsis),
-              subtitle: Text('${u['note_count'] ?? 0} notes • ${u['is_active'] == true ? 'Active' : 'Inactive'} • Last: ${_lastLogin(u['last_login'])}',
-                style: const TextStyle(fontSize: 11, color: C.textMuted, fontFamily: 'Inter')),
+              subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('${u['note_count'] ?? 0} notes • ${u['is_active'] == true ? 'Active' : 'Inactive'}',
+                  style: const TextStyle(fontSize: 11, color: C.textMuted, fontFamily: 'Inter')),
+                Row(children: [
+                  Icon(u['location_permission'] == true ? Icons.location_on_rounded : Icons.location_off_rounded,
+                    size: 11, color: u['location_permission'] == true ? C.success : C.textMuted),
+                  const SizedBox(width: 3),
+                  Text(u['location_permission'] == true ? 'Location: Allowed' : 'Location: Not allowed',
+                    style: TextStyle(fontSize: 11, color: u['location_permission'] == true ? C.success : C.textMuted, fontFamily: 'Inter')),
+                ]),
+              ]),
               trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (u['location_permission'] == true) IconButton(
+                  icon: const Icon(Icons.my_location_rounded, size: 18, color: C.success),
+                  onPressed: () => context.push('/admin/users/$id/location', extra: u),
+                  tooltip: 'View Location',
+                ),
                 IconButton(icon: const Icon(Icons.edit_outlined, size: 18, color: C.primary), onPressed: () => context.push('/admin/users/$id', extra: u)),
                 IconButton(icon: const Icon(Icons.delete_outline_rounded, size: 18, color: C.error), onPressed: () async {
                   final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
@@ -265,7 +285,7 @@ class _AdminState extends ConsumerState<AdminScreen> with SingleTickerProviderSt
     return ListView(padding: const EdgeInsets.all(20), children: [
       Center(child: Stack(children: [
         CircleAvatar(radius: 52, backgroundColor: C.primary.withOpacity(0.1),
-          backgroundImage: _profile?['profile_photo_url'] != null ? NetworkImage(_profile!['profile_photo_url']) : null,
+          backgroundImage: _profile?['profile_photo_url'] != null ? NetworkImage(_adminPhotoUrl()) : null,
           child: _profile?['profile_photo_url'] == null ? const Icon(Icons.admin_panel_settings_rounded, color: C.primary, size: 48) : null),
         Positioned(bottom: 0, right: 0, child: GestureDetector(onTap: _pickAdminPhoto,
           child: Container(padding: const EdgeInsets.all(8), decoration: const BoxDecoration(color: C.primary, shape: BoxShape.circle),

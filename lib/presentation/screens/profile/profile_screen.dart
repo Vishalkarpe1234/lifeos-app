@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
+import 'package:lifeos/core/constants/app_constants.dart';
 import 'package:lifeos/presentation/providers/auth_provider.dart';
 import 'package:lifeos/services/api/api_client.dart';
 
@@ -16,6 +17,13 @@ class ProfileScreen extends ConsumerStatefulWidget {
 class _ProfileState extends ConsumerState<ProfileScreen> {
   Map<String, dynamic>? _profile;
   bool _loading = true;
+
+  String? _photoUrl() {
+    final u = _profile?['profile_photo_url'];
+    if (u == null) return null;
+    if (u.toString().startsWith('http')) return u.toString();
+    return '${AppConstants.baseUrl}$u';
+  }
 
   @override
   void initState() { super.initState(); _load(); }
@@ -94,8 +102,8 @@ class _ProfileState extends ConsumerState<ProfileScreen> {
       body: _loading ? const Center(child: CircularProgressIndicator()) : ListView(padding: const EdgeInsets.all(20), children: [
         Center(child: Stack(children: [
           CircleAvatar(radius: 48, backgroundColor: C.primary.withOpacity(0.1),
-            backgroundImage: (_profile?['profile_photo_url'] != null) ? NetworkImage(_profile!['profile_photo_url']) : null,
-            child: _profile?['profile_photo_url'] == null ? const Icon(Icons.person, color: C.primary, size: 48) : null),
+            backgroundImage: (_photoUrl() != null) ? NetworkImage(_photoUrl()!) : null,
+            child: _photoUrl() == null ? const Icon(Icons.person, color: C.primary, size: 48) : null),
           Positioned(bottom: 0, right: 0, child: GestureDetector(onTap: _pickPhoto,
             child: Container(padding: const EdgeInsets.all(8), decoration: const BoxDecoration(color: C.primary, shape: BoxShape.circle),
               child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16)))),

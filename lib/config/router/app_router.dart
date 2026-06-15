@@ -11,6 +11,7 @@ import 'package:lifeos/presentation/screens/notes/note_editor_screen.dart';
 import 'package:lifeos/presentation/screens/profile/profile_screen.dart';
 import 'package:lifeos/presentation/screens/admin/admin_screen.dart';
 import 'package:lifeos/presentation/screens/admin/admin_user_detail_screen.dart';
+import 'package:lifeos/presentation/screens/admin/admin_location_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authProvider);
@@ -35,6 +36,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
       GoRoute(path: '/admin', builder: (_, __) => const AdminScreen()),
       GoRoute(path: '/admin/users/:id', builder: (_, s) => AdminUserDetailScreen(userId: int.parse(s.pathParameters['id']!), userData: s.extra as Map<String, dynamic>?)),
+      GoRoute(path: '/admin/users/:id/location', builder: (_, s) => AdminLocationScreen(
+        userId: int.parse(s.pathParameters['id']!),
+        userEmail: (s.extra as Map<String, dynamic>?)?['email']?.toString() ?? '',
+      )),
     ],
     errorBuilder: (_, state) => Scaffold(body: Center(child: Text('Page not found: ${state.uri}'))),
   );
