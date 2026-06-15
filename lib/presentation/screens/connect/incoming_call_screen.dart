@@ -13,6 +13,9 @@ class IncomingCallScreen extends ConsumerWidget {
     final controller = ref.read(callControllerProvider.notifier);
 
     ref.listen(callControllerProvider, (prev, next) {
+      if (next.error != null && next.error != prev?.error) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(next.error!), backgroundColor: C.error));
+      }
       if (next.status == CallStatus.idle && context.canPop()) {
         context.pop();
       } else if (next.status == CallStatus.connected && context.canPop()) {

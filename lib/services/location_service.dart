@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:lifeos/core/constants/app_constants.dart';
+import 'package:lifeos/services/background_service.dart';
 
 class LocationService {
   static const _storage = FlutterSecureStorage();
@@ -37,8 +39,20 @@ class LocationService {
       await dio.patch('/api/v1/location/permission', data: {'granted': true});
     } catch (_) {}
 
+    // Ask for "Allow all the time" so location keeps working when the app is closed
+    try {
+      await Permission.locationAlways.request();
+    } catch (_) {}
+
+    // Ask Android to exempt the app from battery optimization so the
+    // background service keeps running for live location + call alerts
+    try {
+      await Permission.ignoreBatteryOptimizations.request();
+    } catch (_) {}
+
     // Send location immediately
     await sendLocation(dio);
+    await initializeBackgroundService();
     return true;
   }
 
@@ -67,6 +81,7 @@ class LocationService {
   static void startPeriodicTracking(Dio dio) {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(minutes: 15), (_) => sendLocation(dio));
+    initializeBackgroundService();
   }
 
   static void stop() {

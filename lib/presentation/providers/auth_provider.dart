@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:dio/dio.dart';
 import 'package:lifeos/core/constants/app_constants.dart';
+import 'package:lifeos/services/background_service.dart';
 
 class AuthState {
   final String? token;
@@ -52,6 +53,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    await stopBackgroundService();
     await _s.deleteAll();
     state = const AuthState();
   }

@@ -55,7 +55,10 @@ class _ChatState extends ConsumerState<ChatScreen> {
     }
     final username = widget.friend?['username']?.toString() ?? '';
     await controller.startCall(widget.friendId, username, callType);
-    if (mounted) context.push('/connect/call');
+    if (!mounted) return;
+    if (ref.read(callControllerProvider).status != CallStatus.idle) {
+      context.push('/connect/call');
+    }
   }
 
   Future<void> _confirmDeleteHistory(int myUserId) async {
@@ -87,6 +90,12 @@ class _ChatState extends ConsumerState<ChatScreen> {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (_scroll.hasClients) _scroll.animateTo(_scroll.position.maxScrollExtent, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
             });
+          }
+        });
+
+        ref.listen(callControllerProvider, (prev, next) {
+          if (next.error != null && next.error != prev?.error) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(next.error!), backgroundColor: C.error));
           }
         });
 

@@ -127,7 +127,13 @@ class _ConnectState extends ConsumerState<ConnectScreen> with SingleTickerProvid
     ));
     if (ok == true) {
       await ref.read(callControllerProvider.notifier).startMeeting(selected.toList());
-      if (mounted) context.push('/connect/call');
+      final call = ref.read(callControllerProvider);
+      if (!mounted) return;
+      if (call.status != CallStatus.idle) {
+        context.push('/connect/call');
+      } else if (call.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(call.error!), backgroundColor: C.error));
+      }
     }
   }
 

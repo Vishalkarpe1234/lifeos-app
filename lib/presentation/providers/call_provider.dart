@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:lifeos/core/constants/app_constants.dart';
 
@@ -37,6 +38,7 @@ class CallState {
   final MediaStream? localStream;
   final bool micMuted;
   final bool cameraOff;
+  final String? error;
 
   const CallState({
     this.status = CallStatus.idle,
@@ -49,6 +51,7 @@ class CallState {
     this.localStream,
     this.micMuted = false,
     this.cameraOff = false,
+    this.error,
   });
 
   CallState copyWith({
@@ -62,6 +65,7 @@ class CallState {
     MediaStream? localStream,
     bool? micMuted,
     bool? cameraOff,
+    String? error,
   }) => CallState(
     status: status ?? this.status,
     roomId: roomId ?? this.roomId,
@@ -73,6 +77,7 @@ class CallState {
     localStream: localStream ?? this.localStream,
     micMuted: micMuted ?? this.micMuted,
     cameraOff: cameraOff ?? this.cameraOff,
+    error: error,
   );
 }
 
@@ -85,6 +90,26 @@ class CallController extends StateNotifier<CallState> {
 
   CallController(this.ref) : super(const CallState()) {
     _connect();
+    _checkPendingInvite();
+  }
+
+  Future<void> _checkPendingInvite() async {
+    const pendingKey = 'pending_call_invite';
+    try {
+      final raw = await _storage.read(key: pendingKey);
+      if (raw == null) return;
+      await _storage.delete(key: pendingKey);
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final receivedAt = DateTime.tryParse(data['received_at']?.toString() ?? '');
+      if (receivedAt == null || DateTime.now().toUtc().difference(receivedAt) > const Duration(seconds: 60)) {
+        return;
+      }
+      if (data['type'] == 'meeting_invite') {
+        _onMeetingInvite(data);
+      } else if (data['type'] == 'call_invite') {
+        _onCallInvite(data);
+      }
+    } catch (_) {}
   }
 
   Future<void> _connect() async {
@@ -155,6 +180,22 @@ class CallController extends StateNotifier<CallState> {
   // Local media
   // ---------------------------------------------------------------------
 
+  Future<bool> _ensurePermissions(bool video) async {
+    final mic = await Permission.microphone.request();
+    if (!mic.isGranted) {
+      state = state.copyWith(error: 'Microphone permission is required for calls');
+      return false;
+    }
+    if (video) {
+      final cam = await Permission.camera.request();
+      if (!cam.isGranted) {
+        state = state.copyWith(error: 'Camera permission is required for video calls');
+        return false;
+      }
+    }
+    return true;
+  }
+
   Future<MediaStream> _getLocalStream(bool video) async {
     final stream = await navigator.mediaDevices.getUserMedia({
       'audio': true,
@@ -184,6 +225,7 @@ class CallController extends StateNotifier<CallState> {
 
   Future<void> startCall(int friendId, String friendUsername, String callType) async {
     if (state.status != CallStatus.idle) return;
+    if (!await _ensurePermissions(callType == 'video')) return;
     final roomId = 'call_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(99999)}';
     final stream = await _getLocalStream(callType == 'video');
     state = state.copyWith(
@@ -238,6 +280,14 @@ class CallController extends StateNotifier<CallState> {
   Future<void> acceptCall() async {
     final roomId = state.roomId;
     if (roomId == null) return;
+    if (!await _ensurePermissions(state.callType == 'video')) {
+      final err = state.error;
+      if (!state.isMeeting && state.peerUserId != null) {
+        _send({'type': 'call_reject', 'to': state.peerUserId, 'room_id': state.roomId});
+      }
+      _reset(error: err);
+      return;
+    }
     final stream = await _getLocalStream(state.callType == 'video');
     state = state.copyWith(status: CallStatus.connected, localStream: stream);
     if (!state.isMeeting) {
@@ -276,6 +326,7 @@ class CallController extends StateNotifier<CallState> {
 
   Future<void> startMeeting(List<int> friendIds) async {
     if (state.status != CallStatus.idle) return;
+    if (!await _ensurePermissions(true)) return;
     final roomId = 'meet_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(99999)}';
     final stream = await _getLocalStream(true);
     state = state.copyWith(
@@ -447,13 +498,13 @@ class CallController extends StateNotifier<CallState> {
     state = state.copyWith(participants: List.of(state.participants));
   }
 
-  void _reset() {
+  void _reset({String? error}) {
     for (final p in state.participants) {
       p.pc?.close();
       p.renderer.dispose();
     }
     _releaseLocalStream();
-    state = const CallState();
+    state = CallState(error: error);
   }
 
   @override
