@@ -57,6 +57,22 @@ class ConnectService {
   Future<void> deleteChatHistory(int friendId) async {
     await _dio.delete('/api/v1/connect/messages/$friendId');
   }
+
+  Future<void> markRead(int friendId) async {
+    await _dio.post('/api/v1/connect/messages/$friendId/read');
+  }
+
+  Future<Map<String, dynamic>> getNotifications() async {
+    final r = await _dio.get('/api/v1/connect/notifications');
+    return Map<String, dynamic>.from(r.data);
+  }
+
+  Future<Map<String, dynamic>> uploadChatFile(String filePath) async {
+    final form = FormData.fromMap({'file': await MultipartFile.fromFile(filePath, filename: filePath.split('/').last)});
+    final r = await _dio.post('/api/v1/connect/upload', data: form,
+      options: Options(contentType: 'multipart/form-data'));
+    return Map<String, dynamic>.from(r.data);
+  }
 }
 
 final connectServiceProvider = Provider<ConnectService>((ref) => ConnectService(ref.watch(dioProvider)));
@@ -74,11 +90,13 @@ class ChatMessage {
   final String? fileUrl;
   final String? fileType;
   final String? timestamp;
-  ChatMessage({required this.id, required this.senderId, required this.receiverId, this.content, this.fileUrl, this.fileType, this.timestamp});
+  final bool isRead;
+  ChatMessage({required this.id, required this.senderId, required this.receiverId, this.content, this.fileUrl, this.fileType, this.timestamp, this.isRead = false});
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
     id: j['id'], senderId: j['sender_id'], receiverId: j['receiver_id'],
     content: j['content'], fileUrl: j['file_url'], fileType: j['file_type'], timestamp: j['timestamp']?.toString(),
+    isRead: j['is_read'] == true,
   );
 }
 
@@ -109,6 +127,7 @@ class ChatController extends StateNotifier<ChatState> {
     } catch (_) {
       state = state.copyWith(loading: false);
     }
+    try { await _service.markRead(friendId); } catch (_) {}
     await _connect();
   }
 
@@ -127,6 +146,9 @@ class ChatController extends StateNotifier<ChatState> {
             final msg = ChatMessage.fromJson(Map<String, dynamic>.from(data['message']));
             if (msg.senderId == friendId || msg.receiverId == friendId) {
               state = state.copyWith(messages: [...state.messages, msg]);
+              if (msg.senderId == friendId) {
+                _service.markRead(friendId).catchError((_) {});
+              }
             }
           }
         } catch (_) {}
@@ -146,6 +168,18 @@ class ChatController extends StateNotifier<ChatState> {
     channel.sink.add(jsonEncode({'type': 'message', 'to': friendId, 'content': content}));
   }
 
+  Future<void> sendFile(String filePath) async {
+    final result = await _service.uploadChatFile(filePath);
+    final channel = _channel;
+    if (channel == null) return;
+    channel.sink.add(jsonEncode({
+      'type': 'message',
+      'to': friendId,
+      'file_url': result['file_url'],
+      'file_type': result['file_type'],
+    }));
+  }
+
   Future<void> deleteHistory() async {
     await _service.deleteChatHistory(friendId);
     state = state.copyWith(messages: []);
@@ -161,3 +195,15 @@ class ChatController extends StateNotifier<ChatState> {
 final chatControllerProvider = StateNotifierProvider.family<ChatController, ChatState, ({int friendId, int myUserId})>(
   (ref, args) => ChatController(ref.watch(connectServiceProvider), args.friendId, args.myUserId),
 );
+
+final connectNotificationsProvider = StreamProvider.autoDispose<Map<String, dynamic>>((ref) async* {
+  final service = ref.watch(connectServiceProvider);
+  while (true) {
+    try {
+      yield await service.getNotifications();
+    } catch (_) {
+      yield const {'pending_requests': 0, 'unread_messages': 0, 'unread_by_friend': {}};
+    }
+    await Future.delayed(const Duration(seconds: 20));
+  }
+});

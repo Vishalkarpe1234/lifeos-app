@@ -146,6 +146,11 @@ class _ConnectState extends ConsumerState<ConnectScreen> with SingleTickerProvid
         ])),
       ]));
     }
+    final notif = ref.watch(connectNotificationsProvider);
+    final unreadByFriend = notif.maybeWhen(
+      data: (d) => Map<String, dynamic>.from(d['unread_by_friend'] ?? {}),
+      orElse: () => <String, dynamic>{},
+    );
     return RefreshIndicator(onRefresh: _loadFriends, child: ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 4),
       itemCount: _friends.length,
@@ -153,6 +158,7 @@ class _ConnectState extends ConsumerState<ConnectScreen> with SingleTickerProvid
       itemBuilder: (_, i) {
         final f = _friends[i];
         final photo = _photoUrl(f['profile_photo_url']?.toString());
+        final unread = (unreadByFriend['${f['id']}'] ?? 0) as int;
         return ListTile(
           leading: Stack(children: [
             CircleAvatar(radius: 22, backgroundColor: C.primary.withOpacity(0.12),
@@ -163,7 +169,11 @@ class _ConnectState extends ConsumerState<ConnectScreen> with SingleTickerProvid
           ]),
           title: Text('@${f['username']}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: C.text, fontFamily: 'Inter')),
           subtitle: Text(f['full_name'] ?? (f['bio'] ?? ''), style: const TextStyle(fontSize: 12, color: C.textSub, fontFamily: 'Inter'), maxLines: 1, overflow: TextOverflow.ellipsis),
-          trailing: IconButton(icon: const Icon(Icons.more_vert_rounded, color: C.textMuted, size: 18), onPressed: () => _removeFriend(f['id'])),
+          trailing: unread > 0
+            ? Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(color: C.error, borderRadius: BorderRadius.circular(10)),
+                child: Text('$unread', style: const TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'Inter', fontWeight: FontWeight.w700)))
+            : IconButton(icon: const Icon(Icons.more_vert_rounded, color: C.textMuted, size: 18), onPressed: () => _removeFriend(f['id'])),
           onTap: () => context.push('/connect/chat/${f['id']}', extra: f),
         );
       },

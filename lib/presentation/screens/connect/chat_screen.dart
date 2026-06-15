@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
+import 'package:lifeos/core/constants/app_constants.dart';
 import 'package:lifeos/presentation/providers/connect_provider.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
@@ -28,6 +31,19 @@ class _ChatState extends ConsumerState<ChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) _scroll.animateTo(_scroll.position.maxScrollExtent, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
     });
+  }
+
+  Future<void> _pickAndSendImage(int myUserId) async {
+    final img = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (img == null) return;
+    try {
+      await ref.read(chatControllerProvider((friendId: widget.friendId, myUserId: myUserId)).notifier).sendFile(img.path);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scroll.hasClients) _scroll.animateTo(_scroll.position.maxScrollExtent, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+      });
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to send image'), backgroundColor: C.error));
+    }
   }
 
   Future<void> _confirmDeleteHistory(int myUserId) async {
@@ -90,18 +106,29 @@ class _ChatState extends ConsumerState<ChatScreen> {
                     itemBuilder: (_, i) {
                       final m = chat.messages[i];
                       final mine = m.senderId == myUserId;
+                      final isImage = m.fileUrl != null && m.fileType == 'image';
                       return Align(
                         alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          padding: isImage ? const EdgeInsets.all(4) : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
                           decoration: BoxDecoration(
                             color: mine ? C.primary : Colors.white,
                             borderRadius: BorderRadius.circular(14),
                             border: mine ? null : Border.all(color: C.border),
                           ),
-                          child: Text(m.content ?? '', style: TextStyle(color: mine ? Colors.white : C.text, fontFamily: 'Inter', fontSize: 14)),
+                          child: isImage
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: CachedNetworkImage(
+                                  imageUrl: '${AppConstants.baseUrl}${m.fileUrl}',
+                                  placeholder: (_, __) => const SizedBox(width: 160, height: 160, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+                                  errorWidget: (_, __, ___) => const SizedBox(width: 160, height: 160, child: Icon(Icons.broken_image_outlined, color: C.textMuted)),
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                            : Text(m.content ?? '', style: TextStyle(color: mine ? Colors.white : C.text, fontFamily: 'Inter', fontSize: 14)),
                         ),
                       );
                     },
@@ -109,6 +136,7 @@ class _ChatState extends ConsumerState<ChatScreen> {
             SafeArea(child: Padding(
               padding: const EdgeInsets.all(12),
               child: Row(children: [
+                IconButton(icon: const Icon(Icons.image_outlined, color: C.primary), onPressed: () => _pickAndSendImage(myUserId)),
                 Expanded(child: TextField(
                   controller: _input,
                   decoration: const InputDecoration(hintText: 'Message...', contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
