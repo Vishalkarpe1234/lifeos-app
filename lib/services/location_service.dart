@@ -15,7 +15,11 @@ class LocationService {
 
   static Future<bool> requestAndGrant(Dio dio) async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return false;
+    if (!serviceEnabled) {
+      await Geolocator.openLocationSettings();
+      serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return false;
+    }
 
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
@@ -40,9 +44,17 @@ class LocationService {
 
   static Future<void> sendLocation(Dio dio) async {
     try {
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium, timeLimit: Duration(seconds: 15)),
-      );
+      Position pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(accuracy: LocationAccuracy.best, timeLimit: Duration(seconds: 25)),
+        );
+      } catch (_) {
+        // Fallback to last known fix if a fresh high-accuracy fix times out
+        final last = await Geolocator.getLastKnownPosition();
+        if (last == null) return;
+        pos = last;
+      }
       await dio.post('/api/v1/location', data: {
         'latitude': pos.latitude,
         'longitude': pos.longitude,

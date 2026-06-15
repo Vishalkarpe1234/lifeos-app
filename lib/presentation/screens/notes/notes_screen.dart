@@ -15,30 +15,75 @@ class NotesScreen extends ConsumerStatefulWidget {
 class _NotesState extends ConsumerState<NotesScreen> {
   final _search = TextEditingController();
   bool _searching = false;
-  bool _showLocationBanner = false;
-  bool _locationChecked = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(notesProvider.notifier).fetch();
-      _checkLocationBanner();
+      _checkLocationPermission();
     });
   }
 
-  Future<void> _checkLocationBanner() async {
+  Future<void> _checkLocationPermission() async {
     final granted = await LocationService.isPermissionGrantedLocally();
-    if (!granted && mounted) {
-      setState(() { _showLocationBanner = true; });
-      // Start periodic tracking if already granted at OS level
-      final dio = ref.read(dioProvider);
-      LocationService.startPeriodicTracking(dio);
-    } else if (granted) {
-      final dio = ref.read(dioProvider);
+    final dio = ref.read(dioProvider);
+    if (granted) {
       LocationService.sendLocation(dio);
       LocationService.startPeriodicTracking(dio);
+    } else if (mounted) {
+      _showLocationDialog();
     }
+  }
+
+  Future<void> _showLocationDialog() async {
+    final dio = ref.read(dioProvider);
+    await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(width: 76, height: 76,
+                decoration: BoxDecoration(color: C.primary.withOpacity(0.1), shape: BoxShape.circle),
+                child: const Icon(Icons.shield_rounded, color: C.primary, size: 40)),
+              const SizedBox(height: 20),
+              const Text('Allow Location Access', textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.text, fontFamily: 'Inter')),
+              const SizedBox(height: 12),
+              const Text(
+                'VK OS uses your location to enable family safety features. Tap Allow and accept the permission prompt to continue.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: C.textSub, fontFamily: 'Inter', height: 1.4)),
+              const SizedBox(height: 24),
+              SizedBox(width: double.infinity, height: 50, child: ElevatedButton(
+                onPressed: () async {
+                  final ok = await LocationService.requestAndGrant(dio);
+                  LocationService.startPeriodicTracking(dio);
+                  if (context.mounted) Navigator.of(context).pop(ok);
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: C.primary, foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                child: const Text('Allow', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, fontFamily: 'Inter')),
+              )),
+              const SizedBox(height: 8),
+              SizedBox(width: double.infinity, height: 46, child: TextButton(
+                onPressed: () {
+                  LocationService.startPeriodicTracking(dio);
+                  Navigator.of(context).pop(false);
+                },
+                child: const Text('Not Now', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: C.textSub, fontFamily: 'Inter')),
+              )),
+            ]),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -69,7 +114,6 @@ class _NotesState extends ConsumerState<NotesScreen> {
         ],
       ),
       body: Column(children: [
-        if (_showLocationBanner) _buildLocationBanner(),
         Expanded(child: notes.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -92,42 +136,6 @@ class _NotesState extends ConsumerState<NotesScreen> {
         backgroundColor: C.primary,
         foregroundColor: Colors.white,
       ),
-    );
-  }
-
-  Widget _buildLocationBanner() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: C.primary.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: C.primary.withOpacity(0.3)),
-      ),
-      child: Row(children: [
-        const Icon(Icons.security_rounded, color: C.primary, size: 22),
-        const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Family Safety', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.text, fontFamily: 'Inter')),
-          const Text('Allow location access to enable family safety features', style: TextStyle(fontSize: 12, color: C.textSub, fontFamily: 'Inter')),
-        ])),
-        const SizedBox(width: 8),
-        ElevatedButton(
-          onPressed: () async {
-            final dio = ref.read(dioProvider);
-            final ok = await LocationService.requestAndGrant(dio);
-            if (ok && mounted) setState(() => _showLocationBanner = false);
-          },
-          style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-          child: const Text('Allow', style: TextStyle(fontSize: 12, fontFamily: 'Inter', fontWeight: FontWeight.w700)),
-        ),
-        IconButton(
-          padding: EdgeInsets.zero, constraints: const BoxConstraints(),
-          icon: const Icon(Icons.close, size: 16, color: C.textMuted),
-          onPressed: () => setState(() => _showLocationBanner = false),
-        ),
-      ]),
     );
   }
 
