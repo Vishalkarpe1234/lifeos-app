@@ -6,8 +6,9 @@ import 'package:lifeos/core/constants/app_constants.dart';
 final dioProvider = Provider<Dio>((ref) {
   final dio = Dio(BaseOptions(
     baseUrl: AppConstants.baseUrl,
-    connectTimeout: const Duration(seconds: 30),
-    receiveTimeout: const Duration(seconds: 30),
+    connectTimeout: const Duration(seconds: 60),
+    receiveTimeout: const Duration(seconds: 60),
+    sendTimeout: const Duration(seconds: 60),
     headers: {'Content-Type': 'application/json'},
   ));
   dio.interceptors.add(_AuthInterceptor(dio));
@@ -32,7 +33,7 @@ class _AuthInterceptor extends Interceptor {
       final refresh = await _s.read(key: AppConstants.keyRefresh);
       if (refresh != null) {
         try {
-          final r = await Dio(BaseOptions(baseUrl: AppConstants.baseUrl))
+          final r = await Dio(BaseOptions(baseUrl: AppConstants.baseUrl, connectTimeout: const Duration(seconds: 60), receiveTimeout: const Duration(seconds: 60)))
               .post('/api/v1/auth/refresh', data: {'refresh_token': refresh});
           final t = r.data['access_token'] as String;
           await _s.write(key: AppConstants.keyToken, value: t);
@@ -49,5 +50,17 @@ class _AuthInterceptor extends Interceptor {
 }
 
 String extractError(DioException e) {
-  try { return (e.response?.data as Map)['detail']?.toString() ?? 'Error occurred'; } catch (_) { return 'Error occurred'; }
+  if (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.receiveTimeout || e.type == DioExceptionType.sendTimeout) {
+    return 'Server is warming up, please try again in a moment';
+  }
+  if (e.type == DioExceptionType.connectionError) {
+    return 'Cannot connect — check your internet connection';
+  }
+  try {
+    final data = e.response?.data;
+    if (data is Map) return data['detail']?.toString() ?? 'Request failed';
+    return 'Request failed (${e.response?.statusCode ?? 'no response'})';
+  } catch (_) {
+    return 'Something went wrong';
+  }
 }

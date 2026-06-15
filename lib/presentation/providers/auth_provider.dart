@@ -31,7 +31,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<bool> login(String email, String password) async {
     state = state.copyWith(loading: true, clearErr: true);
     try {
-      final dio = Dio(BaseOptions(baseUrl: AppConstants.baseUrl));
+      final dio = Dio(BaseOptions(baseUrl: AppConstants.baseUrl, connectTimeout: const Duration(seconds: 60), receiveTimeout: const Duration(seconds: 60)));
       final r = await dio.post('/api/v1/auth/login', data: {'email': email.trim().toLowerCase(), 'password': password});
       final token = r.data['access_token'] as String;
       final refresh = r.data['refresh_token'] as String;

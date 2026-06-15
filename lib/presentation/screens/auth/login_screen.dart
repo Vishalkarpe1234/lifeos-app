@@ -90,7 +90,13 @@ class _LoginState extends ConsumerState<LoginScreen> {
             const SizedBox(height: 22),
             SizedBox(width: double.infinity,
               child: auth.loading
-                ? const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)))
+                ? Column(children: [
+                    const SizedBox(height: 4, child: LinearProgressIndicator()),
+                    const SizedBox(height: 12),
+                    Text('Signing in...', style: TextStyle(color: C.primary, fontFamily: 'Inter', fontSize: 13)),
+                    const SizedBox(height: 4),
+                    const Text('Server may take up to 60s on first use', style: TextStyle(color: C.textMuted, fontFamily: 'Inter', fontSize: 11)),
+                  ])
                 : ElevatedButton(onPressed: _login, child: Text(_adminMode ? 'Sign In as Admin' : 'Sign In'))),
           ])),
           const SizedBox(height: 16),
