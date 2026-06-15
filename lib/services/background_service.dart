@@ -56,8 +56,6 @@ Future<void> stopBackgroundService() async {
 
 @pragma('vm:entry-point')
 void _onStart(ServiceInstance service) async {
-  DartPluginRegistrant.ensureInitialized();
-
   final storage = const FlutterSecureStorage();
   final notifications = FlutterLocalNotificationsPlugin();
   await notifications.initialize(const InitializationSettings(
