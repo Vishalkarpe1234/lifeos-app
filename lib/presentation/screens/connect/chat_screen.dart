@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
 import 'package:lifeos/core/constants/app_constants.dart';
 import 'package:lifeos/presentation/providers/connect_provider.dart';
+import 'package:lifeos/presentation/providers/call_provider.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final int friendId;
@@ -44,6 +45,17 @@ class _ChatState extends ConsumerState<ChatScreen> {
     } catch (_) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to send image'), backgroundColor: C.error));
     }
+  }
+
+  Future<void> _startCall(int myUserId, String callType) async {
+    final controller = ref.read(callControllerProvider.notifier);
+    if (ref.read(callControllerProvider).status != CallStatus.idle) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A call is already in progress'), backgroundColor: C.error));
+      return;
+    }
+    final username = widget.friend?['username']?.toString() ?? '';
+    await controller.startCall(widget.friendId, username, callType);
+    if (mounted) context.push('/connect/call');
   }
 
   Future<void> _confirmDeleteHistory(int myUserId) async {
@@ -91,6 +103,8 @@ class _ChatState extends ConsumerState<ChatScreen> {
               ])),
             ]),
             actions: [
+              IconButton(icon: const Icon(Icons.call_outlined, color: C.primary), onPressed: () => _startCall(myUserId, 'audio')),
+              IconButton(icon: const Icon(Icons.videocam_outlined, color: C.primary), onPressed: () => _startCall(myUserId, 'video')),
               IconButton(icon: const Icon(Icons.delete_outline_rounded, color: C.error), onPressed: () => _confirmDeleteHistory(myUserId)),
             ],
           ),

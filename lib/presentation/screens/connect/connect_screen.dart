@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
 import 'package:lifeos/core/constants/app_constants.dart';
 import 'package:lifeos/presentation/providers/connect_provider.dart';
+import 'package:lifeos/presentation/providers/call_provider.dart';
 import 'package:lifeos/services/api/api_client.dart';
 
 class ConnectScreen extends ConsumerStatefulWidget {
@@ -98,6 +99,38 @@ class _ConnectState extends ConsumerState<ConnectScreen> with SingleTickerProvid
     }
   }
 
+  Future<void> _startMeetingDialog() async {
+    if (ref.read(callControllerProvider).status != CallStatus.idle) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A call is already in progress'), backgroundColor: C.error));
+      return;
+    }
+    final selected = <int>{};
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setSt) => AlertDialog(
+        title: const Text('Start Meeting', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
+        content: SizedBox(width: double.maxFinite, child: ListView(
+          shrinkWrap: true,
+          children: _friends.map((f) {
+            final id = f['id'] as int;
+            return CheckboxListTile(
+              value: selected.contains(id),
+              title: Text('@${f['username']}', style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 14)),
+              onChanged: (v) => setSt(() { if (v == true) selected.add(id); else selected.remove(id); }),
+            );
+          }).toList(),
+        )),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Start')),
+        ],
+      ),
+    ));
+    if (ok == true) {
+      await ref.read(callControllerProvider.notifier).startMeeting(selected.toList());
+      if (mounted) context.push('/connect/call');
+    }
+  }
+
   String? _photoUrl(String? u) {
     if (u == null) return null;
     if (u.startsWith('http')) return u;
@@ -112,6 +145,13 @@ class _ConnectState extends ConsumerState<ConnectScreen> with SingleTickerProvid
       appBar: AppBar(
         title: const Text('Connect'),
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18), onPressed: () => context.pop()),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.video_call_outlined),
+            tooltip: 'Start Meeting',
+            onPressed: _friends.isEmpty ? null : _startMeetingDialog,
+          ),
+        ],
         bottom: TabBar(controller: _tabs,
           labelColor: C.primary, unselectedLabelColor: C.textMuted,
           indicatorColor: C.primary, indicatorWeight: 2,

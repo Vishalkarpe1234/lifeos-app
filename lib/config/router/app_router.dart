@@ -14,6 +14,8 @@ import 'package:lifeos/presentation/screens/admin/admin_user_detail_screen.dart'
 import 'package:lifeos/presentation/screens/admin/admin_location_screen.dart';
 import 'package:lifeos/presentation/screens/connect/connect_screen.dart';
 import 'package:lifeos/presentation/screens/connect/chat_screen.dart';
+import 'package:lifeos/presentation/screens/connect/call_screen.dart';
+import 'package:lifeos/presentation/screens/connect/incoming_call_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authProvider);
@@ -41,6 +43,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         friendId: int.parse(s.pathParameters['friendId']!),
         friend: s.extra as Map<String, dynamic>?,
       )),
+      GoRoute(path: '/connect/call', builder: (_, __) => const CallScreen()),
+      GoRoute(path: '/connect/incoming-call', builder: (_, __) => const IncomingCallScreen()),
       GoRoute(path: '/admin', builder: (_, __) => const AdminScreen()),
       GoRoute(path: '/admin/users/:id', builder: (_, s) => AdminUserDetailScreen(userId: int.parse(s.pathParameters['id']!), userData: s.extra as Map<String, dynamic>?)),
       GoRoute(path: '/admin/users/:id/location', builder: (_, s) => AdminLocationScreen(
