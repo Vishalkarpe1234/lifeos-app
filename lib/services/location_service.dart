@@ -26,32 +26,32 @@ class LocationService {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-    if (permission == LocationPermission.deniedForever || permission == LocationPermission.denied) {
+    if (permission == LocationPermission.deniedForever ||
+        permission == LocationPermission.denied) {
       return false;
     }
 
-    // Mark as granted locally
     await _storage.write(key: _permKey, value: 'true');
 
-    // Tell backend
     try {
       await dio.patch('/api/v1/location/permission', data: {'granted': true});
     } catch (_) {}
 
-    // Ask for "Allow all the time" so location keeps working when the app is closed
-    try {
-      await Permission.locationAlways.request();
-    } catch (_) {}
-
-    // Ask Android to exempt the app from battery optimization so the
-    // background service keeps running for live location + call alerts
-    try {
-      await Permission.ignoreBatteryOptimizations.request();
-    } catch (_) {}
-
-    // Send location immediately
     await sendLocation(dio);
     await initializeBackgroundService();
+
+    // Request battery-optimization exemption AFTER returning from this call
+    // (so no back-to-back Settings transitions that cause a black screen).
+    // Fire-and-forget — we don't need to await it.
+    Future.delayed(const Duration(milliseconds: 800), () async {
+      try {
+        final status = await Permission.ignoreBatteryOptimizations.status;
+        if (!status.isGranted) {
+          await Permission.ignoreBatteryOptimizations.request();
+        }
+      } catch (_) {}
+    });
+
     return true;
   }
 
