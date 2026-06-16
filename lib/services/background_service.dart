@@ -104,15 +104,21 @@ void _onStart(ServiceInstance service) async {
       2025,
       isMeeting ? 'Meeting invite' : 'Incoming ${callType == 'video' ? 'video' : 'audio'} call',
       isMeeting ? '@$username started a meeting' : '@$username is calling you',
-      const NotificationDetails(android: AndroidNotificationDetails(
-        callChannelId, 'VK OS Calls',
-        priority: Priority.max,
-        importance: Importance.max,
-        fullScreenIntent: true,
-        category: AndroidNotificationCategory.call,
-        playSound: true,
-        visibility: NotificationVisibility.public,
-      )),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          callChannelId, 'VK OS Calls',
+          priority: Priority.max,
+          importance: Importance.max,
+          fullScreenIntent: true,
+          fullScreenIntentLaunchesActivity: true,
+          category: AndroidNotificationCategory.call,
+          playSound: true,
+          enableVibration: true,
+          visibility: NotificationVisibility.public,
+          autoCancel: true,
+        ),
+      ),
+      payload: 'incoming_call',
     );
   }
 

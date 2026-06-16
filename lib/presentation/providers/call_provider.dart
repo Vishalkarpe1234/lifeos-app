@@ -90,10 +90,12 @@ class CallController extends StateNotifier<CallState> {
 
   CallController(this.ref) : super(const CallState()) {
     _connect();
-    _checkPendingInvite();
+    checkPendingInvite();
   }
 
-  Future<void> _checkPendingInvite() async {
+  // Public so main.dart lifecycle observer can call it on app resume
+  Future<void> checkPendingInvite() async {
+    if (state.status != CallStatus.idle) return;
     const pendingKey = 'pending_call_invite';
     try {
       final raw = await _storage.read(key: pendingKey);
@@ -485,6 +487,22 @@ class CallController extends StateNotifier<CallState> {
       track.enabled = !off;
     }
     state = state.copyWith(cameraOff: off);
+  }
+
+  void switchCamera() {
+    final stream = state.localStream;
+    if (stream == null) return;
+    final videoTracks = stream.getVideoTracks();
+    if (videoTracks.isNotEmpty) {
+      Helper.switchCamera(videoTracks.first);
+    }
+  }
+
+  // Invite additional friends into the current call room
+  void addToCall(List<int> friendIds) {
+    final roomId = state.roomId;
+    if (roomId == null || friendIds.isEmpty) return;
+    _send({'type': 'meeting_invite', 'to_ids': friendIds, 'room_id': roomId});
   }
 
   void endCall() {
