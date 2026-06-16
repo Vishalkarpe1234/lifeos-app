@@ -26,7 +26,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final t = await _s.read(key: AppConstants.keyToken);
     final e = await _s.read(key: AppConstants.keyEmail);
     final a = await _s.read(key: AppConstants.keyIsAdmin);
-    if (t != null) state = AuthState(token: t, email: e, isAdmin: a == 'true');
+    if (t != null) {
+      state = AuthState(token: t, email: e, isAdmin: a == 'true');
+      initializeBackgroundService();
+    }
   }
 
   Future<bool> login(String email, String password) async {
@@ -43,6 +46,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _s.write(key: AppConstants.keyEmail, value: email.trim().toLowerCase());
       await _s.write(key: AppConstants.keyIsAdmin, value: isAdmin.toString());
       state = AuthState(token: token, email: email.trim().toLowerCase(), isAdmin: isAdmin);
+      initializeBackgroundService();
       return true;
     } on DioException catch (e) {
       String msg = 'Login failed';
