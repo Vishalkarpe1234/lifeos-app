@@ -99,6 +99,27 @@ class _ConnectState extends ConsumerState<ConnectScreen> with SingleTickerProvid
     }
   }
 
+  Future<void> _startCall(Map<String, dynamic> friend, String callType) async {
+    if (ref.read(callControllerProvider).status != CallStatus.idle) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('A call is already in progress'), backgroundColor: C.error));
+      return;
+    }
+    await ref.read(callControllerProvider.notifier).startCall(
+      friend['id'] as int,
+      friend['username']?.toString() ?? '?',
+      callType,
+    );
+    final call = ref.read(callControllerProvider);
+    if (!mounted) return;
+    if (call.status != CallStatus.idle) {
+      context.push('/connect/call');
+    } else if (call.error != null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(call.error!), backgroundColor: C.error));
+    }
+  }
+
   Future<void> _startMeetingDialog() async {
     if (ref.read(callControllerProvider).status != CallStatus.idle) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A call is already in progress'), backgroundColor: C.error));
@@ -219,7 +240,18 @@ class _ConnectState extends ConsumerState<ConnectScreen> with SingleTickerProvid
             ? Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(color: C.error, borderRadius: BorderRadius.circular(10)),
                 child: Text('$unread', style: const TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'Inter', fontWeight: FontWeight.w700)))
-            : IconButton(icon: const Icon(Icons.more_vert_rounded, color: C.textMuted, size: 18), onPressed: () => _removeFriend(f['id'])),
+            : Row(mainAxisSize: MainAxisSize.min, children: [
+                IconButton(
+                  icon: const Icon(Icons.call_rounded, color: C.success, size: 20),
+                  tooltip: 'Audio call',
+                  onPressed: () => _startCall(f, 'audio'),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.videocam_rounded, color: C.primary, size: 20),
+                  tooltip: 'Video call',
+                  onPressed: () => _startCall(f, 'video'),
+                ),
+              ]),
           onTap: () => context.push('/connect/chat/${f['id']}', extra: f),
         );
       },
