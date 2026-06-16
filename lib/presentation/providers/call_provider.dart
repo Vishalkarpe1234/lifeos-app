@@ -7,12 +7,25 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:lifeos/core/constants/app_constants.dart';
 
-final _iceServers = {
+// STUN + public TURN relay so calls work across mobile NAT (carrier-grade NAT
+// blocks pure STUN). openrelay.metered.ca is a free open-relay project.
+const _iceServers = {
   'iceServers': [
     {'urls': 'stun:stun.l.google.com:19302'},
     {'urls': 'stun:stun1.l.google.com:19302'},
-    {'urls': 'stun:stun2.l.google.com:19302'},
-  ]
+    {
+      'urls': [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:80?transport=tcp',
+        'turns:openrelay.metered.ca:443',
+        'turns:openrelay.metered.ca:443?transport=tcp',
+      ],
+      'username': 'openrelayproject',
+      'credential': 'openrelayproject',
+    },
+  ],
+  'sdpSemantics': 'unified-plan',
+  'iceCandidatePoolSize': 10,
 };
 
 enum CallStatus { idle, ringing, outgoing, connected }
@@ -87,6 +100,8 @@ class CallController extends StateNotifier<CallState> {
   final _storage = const FlutterSecureStorage();
   final RTCVideoRenderer localRenderer = RTCVideoRenderer();
   bool _localRendererReady = false;
+  // Holds ICE candidates that arrive before the peer connection is ready.
+  final Map<int, List<RTCIceCandidate>> _pendingCandidates = {};
 
   CallController(this.ref) : super(const CallState()) {
     _connect();
@@ -438,6 +453,8 @@ class CallController extends StateNotifier<CallState> {
     final pc = await _ensurePeerConnection(participant);
     final sdp = data['sdp'];
     await pc.setRemoteDescription(RTCSessionDescription(sdp['sdp'], sdp['type']));
+    // Drain any ICE candidates that arrived before the PC was ready
+    await _drainCandidates(participant);
     final answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     _send({
@@ -450,19 +467,40 @@ class CallController extends StateNotifier<CallState> {
 
   Future<void> _onAnswer(Map<String, dynamic> data) async {
     final from = data['from'] as int;
-    final participant = state.participants.firstWhere((p) => p.userId == from, orElse: () => CallParticipant(userId: -1));
+    final participant = state.participants.firstWhere(
+        (p) => p.userId == from, orElse: () => CallParticipant(userId: -1));
     if (participant.pc == null) return;
     final sdp = data['sdp'];
     await participant.pc!.setRemoteDescription(RTCSessionDescription(sdp['sdp'], sdp['type']));
+    // Drain any ICE candidates that arrived before remote description was set
+    await _drainCandidates(participant);
   }
 
   Future<void> _onIce(Map<String, dynamic> data) async {
     final from = data['from'] as int;
-    final participant = state.participants.firstWhere((p) => p.userId == from, orElse: () => CallParticipant(userId: -1));
-    if (participant.pc == null) return;
     final c = data['candidate'];
     if (c == null) return;
-    await participant.pc!.addCandidate(RTCIceCandidate(c['candidate'], c['sdpMid'], c['sdpMLineIndex']));
+    final candidate = RTCIceCandidate(c['candidate'], c['sdpMid'], c['sdpMLineIndex']);
+    final participant = state.participants.firstWhere(
+        (p) => p.userId == from, orElse: () => CallParticipant(userId: -1));
+    if (participant.pc == null) {
+      // PC not created yet — queue until remote description is set
+      _pendingCandidates.putIfAbsent(from, () => []).add(candidate);
+      return;
+    }
+    try {
+      await participant.pc!.addCandidate(candidate);
+    } catch (_) {}
+  }
+
+  Future<void> _drainCandidates(CallParticipant participant) async {
+    final queued = _pendingCandidates.remove(participant.userId);
+    if (queued == null) return;
+    for (final c in queued) {
+      try {
+        await participant.pc!.addCandidate(c);
+      } catch (_) {}
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -521,6 +559,7 @@ class CallController extends StateNotifier<CallState> {
       p.pc?.close();
       p.renderer.dispose();
     }
+    _pendingCandidates.clear();
     _releaseLocalStream();
     state = CallState(error: error);
   }
