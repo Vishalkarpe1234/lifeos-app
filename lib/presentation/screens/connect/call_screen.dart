@@ -122,9 +122,9 @@ class CallScreen extends ConsumerWidget {
                   )
                 else
                   _ControlButton(
-                    icon: Icons.volume_up,
-                    active: true,
-                    onTap: () {},
+                    icon: call.speakerOn ? Icons.volume_up : Icons.volume_off,
+                    active: call.speakerOn,
+                    onTap: controller.toggleSpeaker,
                   ),
               ]),
             ]),

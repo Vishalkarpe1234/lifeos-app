@@ -51,6 +51,7 @@ class CallState {
   final MediaStream? localStream;
   final bool micMuted;
   final bool cameraOff;
+  final bool speakerOn;
   final String? error;
 
   const CallState({
@@ -64,6 +65,7 @@ class CallState {
     this.localStream,
     this.micMuted = false,
     this.cameraOff = false,
+    this.speakerOn = true,
     this.error,
   });
 
@@ -78,6 +80,7 @@ class CallState {
     MediaStream? localStream,
     bool? micMuted,
     bool? cameraOff,
+    bool? speakerOn,
     String? error,
   }) => CallState(
     status: status ?? this.status,
@@ -90,6 +93,7 @@ class CallState {
     localStream: localStream ?? this.localStream,
     micMuted: micMuted ?? this.micMuted,
     cameraOff: cameraOff ?? this.cameraOff,
+    speakerOn: speakerOn ?? this.speakerOn,
     error: error,
   );
 }
@@ -223,6 +227,8 @@ class CallController extends StateNotifier<CallState> {
       _localRendererReady = true;
     }
     localRenderer.srcObject = stream;
+    // Always route to speaker on call start so audio is audible
+    try { await Helper.setSpeakerphoneOn(true); } catch (_) {}
     return stream;
   }
 
@@ -525,6 +531,12 @@ class CallController extends StateNotifier<CallState> {
       track.enabled = !off;
     }
     state = state.copyWith(cameraOff: off);
+  }
+
+  void toggleSpeaker() {
+    final on = !state.speakerOn;
+    try { Helper.setSpeakerphoneOn(on); } catch (_) {}
+    state = state.copyWith(speakerOn: on);
   }
 
   void switchCamera() {
