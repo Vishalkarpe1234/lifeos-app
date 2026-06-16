@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:workmanager/workmanager.dart';
 import 'package:lifeos/core/constants/app_constants.dart';
 
 const bgChannelId = 'vkos_background';
@@ -13,12 +14,40 @@ const callChannelId = 'vkos_calls';
 const pendingCallKey = 'pending_call_invite';
 const locPermissionKey = 'loc_permission_granted';
 
+const _watchdogTask = 'vkos_watchdog';
+const _watchdogUnique = 'vkos_watchdog_id';
+
+@pragma('vm:entry-point')
+void _workmanagerDispatcher() {
+  Workmanager().executeTask((task, _) async {
+    if (task == _watchdogTask) {
+      await initializeBackgroundService();
+    }
+    return true;
+  });
+}
+
 Future<void> initializeBackgroundService() async {
   final service = FlutterBackgroundService();
-  if (await service.isRunning()) return;
+  final running = await service.isRunning();
+
+  // Register WorkManager watchdog regardless — keeps it alive every 15 min
+  try {
+    await Workmanager().initialize(_workmanagerDispatcher, isInDebugMode: false);
+    await Workmanager().registerPeriodicTask(
+      _watchdogUnique,
+      _watchdogTask,
+      frequency: const Duration(minutes: 15),
+      existingWorkPolicy: ExistingWorkPolicy.keep,
+      constraints: Constraints(networkType: NetworkType.connected),
+    );
+  } catch (_) {}
+
+  if (running) return;
 
   final notifications = FlutterLocalNotificationsPlugin();
-  final androidPlugin = notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+  final androidPlugin =
+      notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
   await androidPlugin?.createNotificationChannel(const AndroidNotificationChannel(
     bgChannelId, 'VK OS Background Service',
     description: 'Keeps live location sharing and call alerts active',
@@ -52,6 +81,9 @@ Future<void> stopBackgroundService() async {
   if (await service.isRunning()) {
     service.invoke('stopService');
   }
+  try {
+    await Workmanager().cancelByUniqueName(_watchdogUnique);
+  } catch (_) {}
 }
 
 @pragma('vm:entry-point')
@@ -78,7 +110,8 @@ void _onStart(ServiceInstance service) async {
       Position pos;
       try {
         pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 25)),
+          locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 25)),
         );
       } catch (_) {
         final last = await Geolocator.getLastKnownPosition();
@@ -86,7 +119,9 @@ void _onStart(ServiceInstance service) async {
         pos = last;
       }
 
-      final dio = Dio(BaseOptions(baseUrl: AppConstants.baseUrl, headers: {'Authorization': 'Bearer $token'}));
+      final dio = Dio(BaseOptions(
+          baseUrl: AppConstants.baseUrl,
+          headers: {'Authorization': 'Bearer ${token}'}));
       await dio.post('/api/v1/location', data: {
         'latitude': pos.latitude,
         'longitude': pos.longitude,
@@ -124,7 +159,9 @@ void _onStart(ServiceInstance service) async {
   Future<void> connectWs() async {
     final token = await storage.read(key: AppConstants.keyToken);
     if (token == null) return;
-    final base = AppConstants.baseUrl.replaceFirst('https://', 'wss://').replaceFirst('http://', 'ws://');
+    final base = AppConstants.baseUrl
+        .replaceFirst('https://', 'wss://')
+        .replaceFirst('http://', 'ws://');
     final uri = Uri.parse('$base/api/v1/connect/ws?token=$token');
     try {
       channel = WebSocketChannel.connect(uri);
@@ -132,10 +169,12 @@ void _onStart(ServiceInstance service) async {
         try {
           final data = jsonDecode(event as String) as Map<String, dynamic>;
           if (data['type'] == 'call_invite' || data['type'] == 'meeting_invite') {
-            await storage.write(key: pendingCallKey, value: jsonEncode({
-              ...data,
-              'received_at': DateTime.now().toUtc().toIso8601String(),
-            }));
+            await storage.write(
+                key: pendingCallKey,
+                value: jsonEncode({
+                  ...data,
+                  'received_at': DateTime.now().toUtc().toIso8601String(),
+                }));
             await showCallNotification(data);
           }
         } catch (_) {}
@@ -157,14 +196,14 @@ void _onStart(ServiceInstance service) async {
   await connectWs();
   await sendLocation();
 
-  // keep the signaling socket alive
+  // keep WS alive with periodic pings
   Timer.periodic(const Duration(seconds: 25), (_) {
     try {
       channel?.sink.add(jsonEncode({'type': 'ping'}));
     } catch (_) {}
   });
 
-  // periodic live location update
+  // periodic live location update every 2 minutes
   Timer.periodic(const Duration(minutes: 2), (_) => sendLocation());
 
   service.on('stopService').listen((event) {

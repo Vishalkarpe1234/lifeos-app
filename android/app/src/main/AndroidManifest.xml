@@ -52,6 +52,17 @@
             android:foregroundServiceType="location"
             android:exported="false"
             tools:replace="android:exported"/>
+
+        <receiver
+            android:name=".ServiceRestartReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="android.intent.action.SCREEN_ON"/>
+                <action android:name="android.intent.action.USER_PRESENT"/>
+            </intent-filter>
+        </receiver>
     </application>
     <queries>
         <intent>
