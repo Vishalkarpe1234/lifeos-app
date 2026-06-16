@@ -6,7 +6,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:workmanager/workmanager.dart';
 import 'package:lifeos/core/constants/app_constants.dart';
 
 const bgChannelId = 'vkos_background';
@@ -14,36 +13,9 @@ const callChannelId = 'vkos_calls';
 const pendingCallKey = 'pending_call_invite';
 const locPermissionKey = 'loc_permission_granted';
 
-const _watchdogTask = 'vkos_watchdog';
-const _watchdogUnique = 'vkos_watchdog_id';
-
-@pragma('vm:entry-point')
-void _workmanagerDispatcher() {
-  Workmanager().executeTask((task, _) async {
-    if (task == _watchdogTask) {
-      await initializeBackgroundService();
-    }
-    return true;
-  });
-}
-
 Future<void> initializeBackgroundService() async {
   final service = FlutterBackgroundService();
-  final running = await service.isRunning();
-
-  // Register WorkManager watchdog regardless — keeps it alive every 15 min
-  try {
-    await Workmanager().initialize(_workmanagerDispatcher, isInDebugMode: false);
-    await Workmanager().registerPeriodicTask(
-      _watchdogUnique,
-      _watchdogTask,
-      frequency: const Duration(minutes: 15),
-      existingWorkPolicy: ExistingWorkPolicy.keep,
-      constraints: Constraints(networkType: NetworkType.connected),
-    );
-  } catch (_) {}
-
-  if (running) return;
+  if (await service.isRunning()) return;
 
   final notifications = FlutterLocalNotificationsPlugin();
   final androidPlugin =
@@ -81,9 +53,6 @@ Future<void> stopBackgroundService() async {
   if (await service.isRunning()) {
     service.invoke('stopService');
   }
-  try {
-    await Workmanager().cancelByUniqueName(_watchdogUnique);
-  } catch (_) {}
 }
 
 @pragma('vm:entry-point')
@@ -121,7 +90,7 @@ void _onStart(ServiceInstance service) async {
 
       final dio = Dio(BaseOptions(
           baseUrl: AppConstants.baseUrl,
-          headers: {'Authorization': 'Bearer ${token}'}));
+          headers: {'Authorization': 'Bearer $token'}));
       await dio.post('/api/v1/location', data: {
         'latitude': pos.latitude,
         'longitude': pos.longitude,
