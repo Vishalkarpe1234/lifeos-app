@@ -110,7 +110,6 @@ void _onStart(ServiceInstance service) async {
           priority: Priority.max,
           importance: Importance.max,
           fullScreenIntent: true,
-          fullScreenIntentLaunchesActivity: true,
           category: AndroidNotificationCategory.call,
           playSound: true,
           enableVibration: true,
