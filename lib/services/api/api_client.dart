@@ -6,9 +6,9 @@ import 'package:lifeos/core/constants/app_constants.dart';
 final dioProvider = Provider<Dio>((ref) {
   final dio = Dio(BaseOptions(
     baseUrl: AppConstants.baseUrl,
-    connectTimeout: const Duration(seconds: 60),
-    receiveTimeout: const Duration(seconds: 60),
-    sendTimeout: const Duration(seconds: 60),
+    connectTimeout: const Duration(seconds: 12),
+    receiveTimeout: const Duration(seconds: 15),
+    sendTimeout: const Duration(seconds: 12),
     headers: {'Content-Type': 'application/json'},
   ));
   dio.interceptors.add(_AuthInterceptor(dio));
@@ -33,7 +33,7 @@ class _AuthInterceptor extends Interceptor {
       final refresh = await _s.read(key: AppConstants.keyRefresh);
       if (refresh != null) {
         try {
-          final r = await Dio(BaseOptions(baseUrl: AppConstants.baseUrl, connectTimeout: const Duration(seconds: 60), receiveTimeout: const Duration(seconds: 60)))
+          final r = await Dio(BaseOptions(baseUrl: AppConstants.baseUrl, connectTimeout: const Duration(seconds: 12), receiveTimeout: const Duration(seconds: 15)))
               .post('/api/v1/auth/refresh', data: {'refresh_token': refresh});
           final t = r.data['access_token'] as String;
           await _s.write(key: AppConstants.keyToken, value: t);

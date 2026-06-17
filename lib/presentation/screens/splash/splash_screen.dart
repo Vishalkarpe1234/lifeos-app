@@ -23,18 +23,31 @@ class _SplashState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _warmupAndGo() async {
-    // Ping backend to wake it up (Render free tier sleeps after 15 min)
-    final timer = Future.delayed(const Duration(seconds: 4), () {
+    // Minimum 2 seconds of splash display
+    final minWait = Future.delayed(const Duration(seconds: 2));
+
+    // Show "warming up" message after 4s if still waiting
+    final slowTimer = Future.delayed(const Duration(seconds: 4), () {
       if (mounted) setState(() { _slow = true; _status = 'Waking up server...'; });
     });
+
     try {
-      final dio = Dio(BaseOptions(baseUrl: AppConstants.baseUrl, connectTimeout: const Duration(seconds: 60), receiveTimeout: const Duration(seconds: 60)));
+      // Short timeout — don't keep user waiting forever
+      final dio = Dio(BaseOptions(
+        baseUrl: AppConstants.baseUrl,
+        connectTimeout: const Duration(seconds: 20),
+        receiveTimeout: const Duration(seconds: 20),
+      ));
       await dio.get('/health');
-      if (mounted) setState(() => _status = 'Ready!');
+      if (mounted) setState(() { _slow = false; _status = 'Ready!'; });
     } catch (_) {
-      // Backend might be slow — still navigate
+      // Navigate anyway — screens will handle retries
+      if (mounted) setState(() { _slow = true; _status = 'Server warming up...'; });
     }
-    await timer;
+
+    slowTimer.ignore();
+    await minWait;
+
     if (mounted) {
       final auth = ref.read(authProvider);
       context.go(auth.loggedIn ? (auth.isAdmin ? '/admin' : '/notes') : '/login');
@@ -61,7 +74,7 @@ class _SplashState extends ConsumerState<SplashScreen> {
         Text(_status, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(_slow ? 1.0 : 0.6), fontFamily: 'Inter')),
         if (_slow) ...[
           const SizedBox(height: 8),
-          Text('Free server warming up (up to 50s on first load)', style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.5), fontFamily: 'Inter'), textAlign: TextAlign.center),
+          Text('Free server warming up, please wait...', style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.5), fontFamily: 'Inter'), textAlign: TextAlign.center),
         ],
       ])),
     );

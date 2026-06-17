@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:lifeos/services/background_service.dart';
 
 class LocationService {
@@ -40,18 +39,6 @@ class LocationService {
     await sendLocation(dio);
     await initializeBackgroundService();
 
-    // Request battery-optimization exemption AFTER returning from this call
-    // (so no back-to-back Settings transitions that cause a black screen).
-    // Fire-and-forget — we don't need to await it.
-    Future.delayed(const Duration(milliseconds: 800), () async {
-      try {
-        final status = await Permission.ignoreBatteryOptimizations.status;
-        if (!status.isGranted) {
-          await Permission.ignoreBatteryOptimizations.request();
-        }
-      } catch (_) {}
-    });
-
     return true;
   }
 
@@ -60,10 +47,9 @@ class LocationService {
       Position pos;
       try {
         pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(accuracy: LocationAccuracy.best, timeLimit: Duration(seconds: 25)),
+          locationSettings: const LocationSettings(accuracy: LocationAccuracy.best, timeLimit: Duration(seconds: 15)),
         );
       } catch (_) {
-        // Fallback to last known fix if a fresh high-accuracy fix times out
         final last = await Geolocator.getLastKnownPosition();
         if (last == null) return;
         pos = last;

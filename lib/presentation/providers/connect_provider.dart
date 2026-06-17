@@ -138,6 +138,7 @@ class ChatController extends StateNotifier<ChatState> {
     final uri = Uri.parse('$base/api/v1/connect/ws?token=$token');
     try {
       _channel = WebSocketChannel.connect(uri);
+      await _channel!.ready.timeout(const Duration(seconds: 12));
       state = state.copyWith(connected: true);
       _channel!.stream.listen((event) {
         try {
@@ -200,10 +201,10 @@ final connectNotificationsProvider = StreamProvider.autoDispose<Map<String, dyna
   final service = ref.watch(connectServiceProvider);
   while (true) {
     try {
-      yield await service.getNotifications();
+      yield await service.getNotifications().timeout(const Duration(seconds: 10));
     } catch (_) {
       yield const {'pending_requests': 0, 'unread_messages': 0, 'unread_by_friend': {}};
     }
-    await Future.delayed(const Duration(seconds: 20));
+    await Future.delayed(const Duration(seconds: 45));
   }
 });
