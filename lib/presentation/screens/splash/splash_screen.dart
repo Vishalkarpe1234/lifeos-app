@@ -50,7 +50,7 @@ class _SplashState extends ConsumerState<SplashScreen> {
 
     if (mounted) {
       final auth = ref.read(authProvider);
-      context.go(auth.loggedIn ? (auth.isAdmin ? '/admin' : '/notes') : '/login');
+      context.go(auth.loggedIn ? (auth.isAdmin ? '/admin' : '/dashboard') : '/login');
     }
   }
 
