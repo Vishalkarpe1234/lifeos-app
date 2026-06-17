@@ -24,13 +24,53 @@ class _AdminState extends ConsumerState<AdminScreen> with SingleTickerProviderSt
   Map<String, dynamic>? _connectOverview;
   bool _loadingConnect = true;
 
+  // New admin data
+  Map<String, dynamic>? _analytics;
+  List<Map<String, dynamic>> _adminTasks = [];
+  List<Map<String, dynamic>> _adminHabits = [];
+  List<Map<String, dynamic>> _adminJournals = [];
+  bool _loadingAnalytics = true;
+
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 4, vsync: this);
+    _tabs = TabController(length: 8, vsync: this);
     _loadUsers();
     _loadProfile();
     _loadConnectOverview();
+    _loadAnalytics();
+    _loadAdminTasks();
+    _loadAdminHabits();
+    _loadAdminJournals();
+  }
+
+  Future<void> _loadAnalytics() async {
+    setState(() => _loadingAnalytics = true);
+    try {
+      final r = await ref.read(dioProvider).get('/api/v1/admin/analytics');
+      setState(() { _analytics = r.data; _loadingAnalytics = false; });
+    } catch (_) { setState(() => _loadingAnalytics = false); }
+  }
+
+  Future<void> _loadAdminTasks() async {
+    try {
+      final r = await ref.read(dioProvider).get('/api/v1/admin/tasks');
+      setState(() { _adminTasks = List<Map<String, dynamic>>.from(r.data['items']); });
+    } catch (_) {}
+  }
+
+  Future<void> _loadAdminHabits() async {
+    try {
+      final r = await ref.read(dioProvider).get('/api/v1/admin/habits');
+      setState(() { _adminHabits = List<Map<String, dynamic>>.from(r.data['items']); });
+    } catch (_) {}
+  }
+
+  Future<void> _loadAdminJournals() async {
+    try {
+      final r = await ref.read(dioProvider).get('/api/v1/admin/journals');
+      setState(() { _adminJournals = List<Map<String, dynamic>>.from(r.data['items']); });
+    } catch (_) {}
   }
 
   Future<void> _loadConnectOverview() async {
@@ -152,27 +192,178 @@ class _AdminState extends ConsumerState<AdminScreen> with SingleTickerProviderSt
           const Text('Admin Panel'),
         ]),
         actions: [
-          if (_tabs.index == 1 && _selectMode && _selected.isNotEmpty)
+          if (_tabs.index == 1 && _selectMode && _selected.isNotEmpty)  // Users tab
             TextButton.icon(onPressed: _bulkDelete, icon: const Icon(Icons.delete_sweep_rounded, color: C.error, size: 18), label: Text('Delete (${_selected.length})', style: const TextStyle(color: C.error, fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 13))),
           IconButton(icon: const Icon(Icons.logout_rounded, color: C.error), onPressed: () async {
             await ref.read(authProvider.notifier).logout();
             if (mounted) context.go('/login');
           }),
         ],
-        bottom: TabBar(controller: _tabs,
-          labelColor: C.primary, unselectedLabelColor: C.textMuted,
-          indicatorColor: C.primary, indicatorWeight: 2,
+        bottom: TabBar(
+          controller: _tabs,
+          labelColor: C.primary,
+          unselectedLabelColor: C.textMuted,
+          indicatorColor: C.primary,
+          indicatorWeight: 2,
+          isScrollable: true,
           labelStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 13),
           onTap: (_) => setState(() {}),
-          tabs: const [Tab(text: 'Dashboard'), Tab(text: 'Users'), Tab(text: 'Connect'), Tab(text: 'Profile')]),
+          tabs: const [
+            Tab(text: 'Dashboard'),
+            Tab(text: 'Users'),
+            Tab(text: 'Analytics'),
+            Tab(text: 'Tasks'),
+            Tab(text: 'Habits'),
+            Tab(text: 'Journals'),
+            Tab(text: 'Connect'),
+            Tab(text: 'Profile'),
+          ],
+        ),
       ),
       body: TabBarView(controller: _tabs, children: [
         _buildDashboard(nonAdminUsers),
         _buildUsers(nonAdminUsers),
+        _buildAnalyticsTab(),
+        _buildTasksTab(),
+        _buildHabitsTab(),
+        _buildJournalsTab(),
         _buildConnect(),
         _buildProfile(),
       ]),
     );
+  }
+
+  Widget _buildAnalyticsTab() {
+    if (_loadingAnalytics) return const Center(child: CircularProgressIndicator());
+    final a = _analytics;
+    if (a == null) return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      const Text('Failed to load analytics', style: TextStyle(color: C.textSub, fontFamily: 'Inter')),
+      const SizedBox(height: 12),
+      ElevatedButton(onPressed: _loadAnalytics, child: const Text('Retry')),
+    ]));
+    return RefreshIndicator(onRefresh: _loadAnalytics, child: ListView(padding: const EdgeInsets.all(20), children: [
+      _statCard('Total Users', '${a['total_users'] ?? 0}', Icons.people_rounded, C.primary),
+      const SizedBox(height: 12),
+      _statCard('Total Tasks', '${a['total_tasks'] ?? 0}', Icons.task_alt_rounded, C.success),
+      const SizedBox(height: 12),
+      _statCard('Completed Tasks', '${a['completed_tasks'] ?? 0}', Icons.check_circle_rounded, const Color(0xFF10B981)),
+      const SizedBox(height: 12),
+      _statCard('Total Habits', '${a['total_habits'] ?? 0}', Icons.local_fire_department_rounded, const Color(0xFFFF6B35)),
+      const SizedBox(height: 12),
+      _statCard('Journal Entries', '${a['total_journals'] ?? 0}', Icons.menu_book_rounded, const Color(0xFF06B6D4)),
+      const SizedBox(height: 12),
+      _statCard('Total Goals', '${a['total_goals'] ?? 0}', Icons.flag_rounded, const Color(0xFFF59E0B)),
+      const SizedBox(height: 12),
+      _statCard('Total Projects', '${a['total_projects'] ?? 0}', Icons.folder_rounded, const Color(0xFF8B5CF6)),
+    ]));
+  }
+
+  Color _taskPriorityColor(String p) {
+    switch (p) {
+      case 'high': return C.error;
+      case 'medium': return C.warning;
+      default: return C.success;
+    }
+  }
+
+  Widget _buildTasksTab() {
+    if (_adminTasks.isEmpty) return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      const Text('No tasks found', style: TextStyle(color: C.textSub, fontFamily: 'Inter')),
+      const SizedBox(height: 12),
+      ElevatedButton(onPressed: _loadAdminTasks, child: const Text('Refresh')),
+    ]));
+    return RefreshIndicator(onRefresh: () async { await _loadAdminTasks(); }, child: ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _adminTasks.length,
+      itemBuilder: (_, i) {
+        final t = _adminTasks[i];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: C.border)),
+          child: Row(children: [
+            Container(width: 8, height: 8, margin: const EdgeInsets.only(right: 10), decoration: BoxDecoration(color: _taskPriorityColor(t['priority'] ?? 'low'), shape: BoxShape.circle)),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(t['title'] ?? '', style: TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600, color: C.text, decoration: t['is_completed'] == true ? TextDecoration.lineThrough : null)),
+              if (t['due_date'] != null) Text('Due: ${t['due_date']}', style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: C.textMuted)),
+            ])),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              decoration: BoxDecoration(color: t['is_completed'] == true ? C.success.withOpacity(0.1) : C.warning.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+              child: Text(t['is_completed'] == true ? 'Done' : t['status'] ?? 'todo', style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w600, color: t['is_completed'] == true ? C.success : C.warning)),
+            ),
+          ]),
+        );
+      },
+    ));
+  }
+
+  Widget _buildHabitsTab() {
+    if (_adminHabits.isEmpty) return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      const Text('No habits found', style: TextStyle(color: C.textSub, fontFamily: 'Inter')),
+      const SizedBox(height: 12),
+      ElevatedButton(onPressed: _loadAdminHabits, child: const Text('Refresh')),
+    ]));
+    return RefreshIndicator(onRefresh: () async { await _loadAdminHabits(); }, child: ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _adminHabits.length,
+      itemBuilder: (_, i) {
+        final h = _adminHabits[i];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: C.border)),
+          child: Row(children: [
+            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: C.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.local_fire_department_rounded, color: C.primary, size: 18)),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(h['name'] ?? '', style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600, color: C.text)),
+              Text('Streak: ${h['streak_current'] ?? 0} • Best: ${h['streak_longest'] ?? 0}', style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: C.textMuted)),
+            ])),
+            Text(h['frequency'] ?? 'daily', style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: C.textSub)),
+          ]),
+        );
+      },
+    ));
+  }
+
+  String _adminMoodEmoji(String? m) {
+    switch (m) {
+      case 'happy': return '😊';
+      case 'neutral': return '😐';
+      case 'sad': return '😔';
+      case 'productive': return '🔥';
+      case 'tired': return '😴';
+      default: return '📓';
+    }
+  }
+
+  Widget _buildJournalsTab() {
+    if (_adminJournals.isEmpty) return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      const Text('No journal entries', style: TextStyle(color: C.textSub, fontFamily: 'Inter')),
+      const SizedBox(height: 12),
+      ElevatedButton(onPressed: _loadAdminJournals, child: const Text('Refresh')),
+    ]));
+    return RefreshIndicator(onRefresh: () async { await _loadAdminJournals(); }, child: ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _adminJournals.length,
+      itemBuilder: (_, i) {
+        final e = _adminJournals[i];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: C.border)),
+          child: Row(children: [
+            Text(_adminMoodEmoji(e['mood']), style: const TextStyle(fontSize: 22)),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(e['title'] ?? 'Journal Entry', style: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600, color: C.text)),
+              Text(e['date']?.toString() ?? '', style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: C.textMuted)),
+            ])),
+          ]),
+        );
+      },
+    ));
   }
 
   Widget _buildDashboard(List<Map<String, dynamic>> users) {
