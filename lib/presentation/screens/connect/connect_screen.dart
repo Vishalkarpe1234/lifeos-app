@@ -5,7 +5,6 @@ import 'package:dio/dio.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
 import 'package:lifeos/core/constants/app_constants.dart';
 import 'package:lifeos/presentation/providers/connect_provider.dart';
-import 'package:lifeos/presentation/providers/call_provider.dart';
 import 'package:lifeos/services/api/api_client.dart';
 
 class ConnectScreen extends ConsumerStatefulWidget {
@@ -99,65 +98,6 @@ class _ConnectState extends ConsumerState<ConnectScreen> with SingleTickerProvid
     }
   }
 
-  Future<void> _startCall(Map<String, dynamic> friend, String callType) async {
-    if (ref.read(callControllerProvider).status != CallStatus.idle) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('A call is already in progress'), backgroundColor: C.error));
-      return;
-    }
-    await ref.read(callControllerProvider.notifier).startCall(
-      friend['id'] as int,
-      friend['username']?.toString() ?? '?',
-      callType,
-    );
-    final call = ref.read(callControllerProvider);
-    if (!mounted) return;
-    if (call.status != CallStatus.idle) {
-      context.push('/connect/call');
-    } else if (call.error != null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(call.error!), backgroundColor: C.error));
-    }
-  }
-
-  Future<void> _startMeetingDialog() async {
-    if (ref.read(callControllerProvider).status != CallStatus.idle) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A call is already in progress'), backgroundColor: C.error));
-      return;
-    }
-    final selected = <int>{};
-    final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setSt) => AlertDialog(
-        title: const Text('Start Meeting', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
-        content: SizedBox(width: double.maxFinite, child: ListView(
-          shrinkWrap: true,
-          children: _friends.map((f) {
-            final id = f['id'] as int;
-            return CheckboxListTile(
-              value: selected.contains(id),
-              title: Text('@${f['username']}', style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 14)),
-              onChanged: (v) => setSt(() { if (v == true) selected.add(id); else selected.remove(id); }),
-            );
-          }).toList(),
-        )),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Start')),
-        ],
-      ),
-    ));
-    if (ok == true) {
-      await ref.read(callControllerProvider.notifier).startMeeting(selected.toList());
-      final call = ref.read(callControllerProvider);
-      if (!mounted) return;
-      if (call.status != CallStatus.idle) {
-        context.push('/connect/call');
-      } else if (call.error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(call.error!), backgroundColor: C.error));
-      }
-    }
-  }
-
   String? _photoUrl(String? u) {
     if (u == null) return null;
     if (u.startsWith('http')) return u;
@@ -173,11 +113,7 @@ class _ConnectState extends ConsumerState<ConnectScreen> with SingleTickerProvid
         title: const Text('Connect'),
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18), onPressed: () => context.pop()),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.video_call_outlined),
-            tooltip: 'Start Meeting',
-            onPressed: _friends.isEmpty ? null : _startMeetingDialog,
-          ),
+          IconButton(icon: const Icon(Icons.refresh_rounded), tooltip: 'Refresh', onPressed: () { _loadFriends(); _loadRequests(); }),
         ],
         bottom: TabBar(controller: _tabs,
           labelColor: C.primary, unselectedLabelColor: C.textMuted,
@@ -240,18 +176,10 @@ class _ConnectState extends ConsumerState<ConnectScreen> with SingleTickerProvid
             ? Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(color: C.error, borderRadius: BorderRadius.circular(10)),
                 child: Text('$unread', style: const TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'Inter', fontWeight: FontWeight.w700)))
-            : Row(mainAxisSize: MainAxisSize.min, children: [
-                IconButton(
-                  icon: const Icon(Icons.call_rounded, color: C.success, size: 20),
-                  tooltip: 'Audio call',
-                  onPressed: () => _startCall(f, 'audio'),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.videocam_rounded, color: C.primary, size: 20),
-                  tooltip: 'Video call',
-                  onPressed: () => _startCall(f, 'video'),
-                ),
-              ]),
+            : IconButton(
+                icon: const Icon(Icons.more_vert_rounded, color: C.textMuted, size: 20),
+                onPressed: () => _removeFriend(f['id'] as int),
+              ),
           onTap: () => context.push('/connect/chat/${f['id']}', extra: f),
         );
       },

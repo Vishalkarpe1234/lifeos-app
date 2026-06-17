@@ -1,7 +1,5 @@
 allprojects {
     repositories {
-        // Local mirror of davidliu/audioswitch (jitpack is Cloudflare-blocked on CI)
-        maven { url "${rootProject.projectDir}/libs/maven" }
         google()
         mavenCentral()
     }

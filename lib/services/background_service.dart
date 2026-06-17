@@ -9,8 +9,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:lifeos/core/constants/app_constants.dart';
 
 const bgChannelId = 'vkos_background';
-const callChannelId = 'vkos_calls';
-const pendingCallKey = 'pending_call_invite';
+const chatChannelId = 'vkos_chat';
 const locPermissionKey = 'loc_permission_granted';
 
 Future<void> initializeBackgroundService() async {
@@ -22,13 +21,13 @@ Future<void> initializeBackgroundService() async {
       notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
   await androidPlugin?.createNotificationChannel(const AndroidNotificationChannel(
     bgChannelId, 'VK OS Background Service',
-    description: 'Keeps live location sharing and call alerts active',
+    description: 'Keeps live location sharing active',
     importance: Importance.low,
   ));
   await androidPlugin?.createNotificationChannel(const AndroidNotificationChannel(
-    callChannelId, 'VK OS Calls',
-    description: 'Incoming call and meeting alerts',
-    importance: Importance.max,
+    chatChannelId, 'VK OS Chat',
+    description: 'New message notifications',
+    importance: Importance.high,
     playSound: true,
   ));
   await androidPlugin?.requestNotificationsPermission();
@@ -40,7 +39,7 @@ Future<void> initializeBackgroundService() async {
       isForegroundMode: true,
       notificationChannelId: bgChannelId,
       initialNotificationTitle: 'VK OS',
-      initialNotificationContent: 'Live location & call alerts active',
+      initialNotificationContent: 'Live location active',
       foregroundServiceNotificationId: 911,
     ),
     iosConfiguration: IosConfiguration(),
@@ -100,31 +99,6 @@ void _onStart(ServiceInstance service) async {
     } catch (_) {}
   }
 
-  Future<void> showCallNotification(Map<String, dynamic> data) async {
-    final isMeeting = data['type'] == 'meeting_invite';
-    final username = data['from_username'] ?? 'Someone';
-    final callType = data['call_type'] ?? 'video';
-    await notifications.show(
-      2025,
-      isMeeting ? 'Meeting invite' : 'Incoming ${callType == 'video' ? 'video' : 'audio'} call',
-      isMeeting ? '@$username started a meeting' : '@$username is calling you',
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          callChannelId, 'VK OS Calls',
-          priority: Priority.max,
-          importance: Importance.max,
-          fullScreenIntent: true,
-          category: AndroidNotificationCategory.call,
-          playSound: true,
-          enableVibration: true,
-          visibility: NotificationVisibility.public,
-          autoCancel: true,
-        ),
-      ),
-      payload: 'incoming_call',
-    );
-  }
-
   Future<void> connectWs() async {
     final token = await storage.read(key: AppConstants.keyToken);
     if (token == null) return;
@@ -137,14 +111,30 @@ void _onStart(ServiceInstance service) async {
       channel!.stream.listen((event) async {
         try {
           final data = jsonDecode(event as String) as Map<String, dynamic>;
-          if (data['type'] == 'call_invite' || data['type'] == 'meeting_invite') {
-            await storage.write(
-                key: pendingCallKey,
-                value: jsonEncode({
-                  ...data,
-                  'received_at': DateTime.now().toUtc().toIso8601String(),
-                }));
-            await showCallNotification(data);
+          if (data['type'] == 'message') {
+            final msg = data['message'] as Map<String, dynamic>?;
+            if (msg == null) return;
+            final content = msg['content']?.toString();
+            final fileUrl = msg['file_url']?.toString();
+            final fromUsername = msg['from_username']?.toString();
+            final title = fromUsername != null ? 'Message from @$fromUsername' : 'New message';
+            final body = content?.isNotEmpty == true
+                ? content!
+                : (fileUrl != null ? '📷 Image' : 'New message');
+            await notifications.show(
+              (msg['id'] as int? ?? 0) % 10000,
+              title,
+              body,
+              const NotificationDetails(
+                android: AndroidNotificationDetails(
+                  chatChannelId, 'VK OS Chat',
+                  importance: Importance.high,
+                  priority: Priority.high,
+                  playSound: true,
+                  enableVibration: true,
+                ),
+              ),
+            );
           }
         } catch (_) {}
       }, onDone: () {
@@ -165,14 +155,12 @@ void _onStart(ServiceInstance service) async {
   await connectWs();
   await sendLocation();
 
-  // keep WS alive with periodic pings
   Timer.periodic(const Duration(seconds: 25), (_) {
     try {
       channel?.sink.add(jsonEncode({'type': 'ping'}));
     } catch (_) {}
   });
 
-  // periodic live location update every 2 minutes
   Timer.periodic(const Duration(minutes: 2), (_) => sendLocation());
 
   service.on('stopService').listen((event) {

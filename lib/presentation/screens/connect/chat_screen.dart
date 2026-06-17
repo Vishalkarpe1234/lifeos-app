@@ -6,7 +6,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
 import 'package:lifeos/core/constants/app_constants.dart';
 import 'package:lifeos/presentation/providers/connect_provider.dart';
-import 'package:lifeos/presentation/providers/call_provider.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final int friendId;
@@ -47,20 +46,6 @@ class _ChatState extends ConsumerState<ChatScreen> {
     }
   }
 
-  Future<void> _startCall(int myUserId, String callType) async {
-    final controller = ref.read(callControllerProvider.notifier);
-    if (ref.read(callControllerProvider).status != CallStatus.idle) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A call is already in progress'), backgroundColor: C.error));
-      return;
-    }
-    final username = widget.friend?['username']?.toString() ?? '';
-    await controller.startCall(widget.friendId, username, callType);
-    if (!mounted) return;
-    if (ref.read(callControllerProvider).status != CallStatus.idle) {
-      context.push('/connect/call');
-    }
-  }
-
   Future<void> _confirmDeleteHistory(int myUserId) async {
     final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
       title: const Text('Delete Chat History', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
@@ -93,12 +78,6 @@ class _ChatState extends ConsumerState<ChatScreen> {
           }
         });
 
-        ref.listen(callControllerProvider, (prev, next) {
-          if (next.error != null && next.error != prev?.error) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(next.error!), backgroundColor: C.error));
-          }
-        });
-
         return Scaffold(
           appBar: AppBar(
             leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18), onPressed: () => context.pop()),
@@ -112,8 +91,6 @@ class _ChatState extends ConsumerState<ChatScreen> {
               ])),
             ]),
             actions: [
-              IconButton(icon: const Icon(Icons.call_outlined, color: C.primary), onPressed: () => _startCall(myUserId, 'audio')),
-              IconButton(icon: const Icon(Icons.videocam_outlined, color: C.primary), onPressed: () => _startCall(myUserId, 'video')),
               IconButton(icon: const Icon(Icons.delete_outline_rounded, color: C.error), onPressed: () => _confirmDeleteHistory(myUserId)),
             ],
           ),
