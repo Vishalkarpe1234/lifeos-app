@@ -36,6 +36,7 @@ class _LocationHistoryScreenState
   // Live tab
   Position? _currentPosition;
   bool _loadingLive = false;
+  bool _acquiringFix = false; // true while fresh getCurrentPosition is in flight
   DateTime? _lastUpdated;
   bool _permissionGranted = false;
   bool _trackingEnabled = false;
@@ -61,12 +62,24 @@ class _LocationHistoryScreenState
   }
 
   Future<void> _checkPermissionAndLoad() async {
-    final granted = await LocationService.isPermissionGrantedLocally();
+    // Always check actual Android permission — stored flag can be stale
+    // (user may have revoked in Android Settings after we stored 'true')
+    final perm = await Geolocator.checkPermission();
+    final granted = perm == LocationPermission.always ||
+        perm == LocationPermission.whileInUse;
     if (mounted) setState(() => _permissionGranted = granted);
-    if (granted) {
-      _getLiveLocation(); // hard fix immediately
-      _startLiveStream(); // then stream continuously
+    if (!granted) return;
+
+    // Also verify GPS service is on
+    final serviceOn = await Geolocator.isLocationServiceEnabled();
+    if (!serviceOn) {
+      // Prompt user to enable GPS; don't crash
+      await Geolocator.openLocationSettings();
+      return;
     }
+
+    _startLiveStream(); // stream first — keeps GPS warm
+    _getLiveLocation(); // hard fix to centre map immediately
   }
 
   /// Starts a GPS position stream that updates the map in real-time.
@@ -124,35 +137,38 @@ class _LocationHistoryScreenState
     }
   }
 
-  /// Hard refresh: forces a fresh GPS fix and centres the map.
+  /// Hard refresh: show last-known quickly (if fresh), then force a new GPS fix.
   Future<void> _getLiveLocation() async {
     if (!_permissionGranted) {
       _requestPermissionAndTrack();
       return;
     }
-    setState(() => _loadingLive = true);
+    setState(() { _loadingLive = true; _acquiringFix = true; });
 
-    // Try last-known first so map shows something quickly
+    // Stage 1: last-known — ONLY use if it is less than 5 minutes old.
+    // Older cached positions are in the wrong place and confuse the user.
     try {
       final last = await Geolocator.getLastKnownPosition();
-      if (last != null && mounted) {
-        setState(() {
-          _currentPosition = last;
-          _lastUpdated = DateTime.now();
-          _loadingLive = false;
-        });
-        try {
-          _mapController.move(LatLng(last.latitude, last.longitude), 15);
-        } catch (_) {}
+      if (last != null) {
+        final ageMin = DateTime.now().difference(last.timestamp).inMinutes;
+        if (ageMin < 5 && mounted) {
+          setState(() {
+            _currentPosition = last;
+            _lastUpdated = DateTime.now();
+            _loadingLive = false;
+            // _acquiringFix stays true — fresh fix still in flight
+          });
+          try { _mapController.move(LatLng(last.latitude, last.longitude), 15); } catch (_) {}
+        }
       }
     } catch (_) {}
 
-    // Then get a fresh GPS fix (high accuracy, 30 s timeout)
+    // Stage 2: force a fresh GPS fix (high accuracy, 45 s timeout)
     try {
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 30),
+          timeLimit: Duration(seconds: 45),
         ),
       );
       if (mounted) {
@@ -160,13 +176,12 @@ class _LocationHistoryScreenState
           _currentPosition = pos;
           _lastUpdated = DateTime.now();
           _loadingLive = false;
+          _acquiringFix = false;
         });
-        try {
-          _mapController.move(LatLng(pos.latitude, pos.longitude), 15);
-        } catch (_) {}
+        try { _mapController.move(LatLng(pos.latitude, pos.longitude), 15); } catch (_) {}
       }
     } catch (_) {
-      if (mounted) setState(() => _loadingLive = false);
+      if (mounted) setState(() { _loadingLive = false; _acquiringFix = false; });
     }
   }
 
@@ -357,48 +372,94 @@ class _LocationHistoryScreenState
                         ],
                       ),
               )
-            : FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: LatLng(
-                    _currentPosition!.latitude,
-                    _currentPosition!.longitude,
-                  ),
-                  initialZoom: 15,
-                ),
+            : Stack(
                 children: [
-                  TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.lifeos.app',
-                  ),
-                  MarkerLayer(markers: [
-                    Marker(
-                      point: LatLng(
+                  FlutterMap(
+                    mapController: _mapController,
+                    options: MapOptions(
+                      initialCenter: LatLng(
                         _currentPosition!.latitude,
                         _currentPosition!.longitude,
                       ),
-                      width: 44,
-                      height: 44,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: C.primary,
-                          shape: BoxShape.circle,
-                          border:
-                              Border.all(color: Colors.white, width: 3),
-                          boxShadow: [
-                            BoxShadow(
-                              color: C.primary.withOpacity(0.4),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            )
-                          ],
+                      initialZoom: 15,
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.vishalkarpe.lifeos',
+                      ),
+                      // Accuracy radius circle
+                      CircleLayer(circles: [
+                        CircleMarker(
+                          point: LatLng(
+                            _currentPosition!.latitude,
+                            _currentPosition!.longitude,
+                          ),
+                          radius: _currentPosition!.accuracy,
+                          useRadiusInMeter: true,
+                          color: C.primary.withOpacity(0.10),
+                          borderColor: C.primary.withOpacity(0.45),
+                          borderStrokeWidth: 1.5,
                         ),
-                        child: const Icon(Icons.person_rounded,
-                            color: Colors.white, size: 22),
+                      ]),
+                      MarkerLayer(markers: [
+                        Marker(
+                          point: LatLng(
+                            _currentPosition!.latitude,
+                            _currentPosition!.longitude,
+                          ),
+                          width: 44,
+                          height: 44,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: _accuracyColor(),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: _accuracyColor().withOpacity(0.4),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                )
+                              ],
+                            ),
+                            child: const Icon(Icons.person_rounded,
+                                color: Colors.white, size: 22),
+                          ),
+                        ),
+                      ]),
+                    ],
+                  ),
+                  // "Acquiring precise fix…" badge overlay
+                  if (_acquiringFix)
+                    Positioned(
+                      top: 10, left: 0, right: 0,
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.65),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                            SizedBox(
+                              width: 12, height: 12,
+                              child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2),
+                            ),
+                            SizedBox(width: 8),
+                            Text('Acquiring precise location…',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600)),
+                          ]),
+                        ),
                       ),
                     ),
-                  ]),
                 ],
               ),
       ),
@@ -411,20 +472,23 @@ class _LocationHistoryScreenState
           Row(children: [
             Container(
               width: 10, height: 10,
-              decoration: const BoxDecoration(
-                  color: C.success, shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                  color: _currentPosition != null ? _accuracyColor() : C.textMuted,
+                  shape: BoxShape.circle),
             ),
             const SizedBox(width: 8),
-            const Text('Live Location',
-                style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                    color: C.text)),
+            Text(
+              _acquiringFix ? 'Acquiring GPS…' : 'Live Location',
+              style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  color: C.text)),
             const Spacer(),
             IconButton(
-              icon: const Icon(Icons.refresh_rounded, color: C.primary),
-              onPressed: _loadingLive ? null : _getLiveLocation,
+              icon: const Icon(Icons.my_location_rounded, color: C.primary),
+              onPressed: (_loadingLive && _currentPosition == null) ? null : _getLiveLocation,
+              tooltip: 'Hard refresh GPS',
             ),
           ]),
           if (_currentPosition != null) ...[
@@ -432,8 +496,8 @@ class _LocationHistoryScreenState
             _infoRow(Icons.gps_fixed_rounded, 'Coordinates',
                 '${_currentPosition!.latitude.toStringAsFixed(6)}, ${_currentPosition!.longitude.toStringAsFixed(6)}'),
             const SizedBox(height: 4),
-            _infoRow(Icons.radar_rounded, 'Accuracy',
-                '±${_currentPosition!.accuracy.toStringAsFixed(0)} m'),
+            _infoRow(Icons.radar_rounded, 'Accuracy', _accuracyLabel(),
+                valueColor: _accuracyColor()),
             if (_lastUpdated != null) ...[
               const SizedBox(height: 4),
               _infoRow(Icons.schedule_rounded, 'Updated',
@@ -460,21 +524,40 @@ class _LocationHistoryScreenState
     ]);
   }
 
-  Widget _infoRow(IconData icon, String label, String value) => Row(children: [
-    Icon(icon, size: 14, color: C.textMuted),
-    const SizedBox(width: 6),
-    Text('$label: ',
-        style: const TextStyle(
-            fontFamily: 'Inter', fontSize: 12, color: C.textMuted)),
-    Expanded(
-        child: Text(value,
+  Color _accuracyColor() {
+    if (_currentPosition == null) return C.textMuted;
+    final acc = _currentPosition!.accuracy;
+    if (acc <= 20) return C.success;
+    if (acc <= 100) return const Color(0xFFF57C00); // orange
+    return C.error;
+  }
+
+  String _accuracyLabel() {
+    if (_currentPosition == null) return '-';
+    final acc = _currentPosition!.accuracy;
+    if (acc <= 10) return '±${acc.toStringAsFixed(0)} m  (Excellent)';
+    if (acc <= 30) return '±${acc.toStringAsFixed(0)} m  (Good)';
+    if (acc <= 100) return '±${acc.toStringAsFixed(0)} m  (Fair)';
+    return '±${acc.toStringAsFixed(0)} m  (Low — move outdoors)';
+  }
+
+  Widget _infoRow(IconData icon, String label, String value,
+      {Color? valueColor}) =>
+      Row(children: [
+        Icon(icon, size: 14, color: C.textMuted),
+        const SizedBox(width: 6),
+        Text('$label: ',
             style: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: C.text),
-            overflow: TextOverflow.ellipsis)),
-  ]);
+                fontFamily: 'Inter', fontSize: 12, color: C.textMuted)),
+        Expanded(
+            child: Text(value,
+                style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: valueColor ?? C.text),
+                overflow: TextOverflow.ellipsis)),
+      ]);
 
   // ───────────── TAB 2: HISTORY ─────────────
 
@@ -751,7 +834,7 @@ class _LocationHistoryScreenState
                     TileLayer(
                       urlTemplate:
                           'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.lifeos.app',
+                      userAgentPackageName: 'com.vishalkarpe.lifeos',
                     ),
                     MarkerLayer(markers: [
                       Marker(

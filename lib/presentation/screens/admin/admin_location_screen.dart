@@ -220,7 +220,7 @@ class _LocState extends ConsumerState<AdminLocationScreen> with SingleTickerProv
           mapController: _mapController,
           options: MapOptions(initialCenter: selectedLatLng, initialZoom: 14),
           children: [
-            TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.hivetech.lifeos'),
+            TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.vishalkarpe.lifeos'),
             if (_chrono.length > 1) PolylineLayer(polylines: [
               Polyline(
                 points: _chrono.map((l) => LatLng((l['latitude'] as num).toDouble(), (l['longitude'] as num).toDouble())).toList(),
@@ -395,7 +395,7 @@ class _LocState extends ConsumerState<AdminLocationScreen> with SingleTickerProv
                     initialZoom: 15,
                   ),
                   children: [
-                    TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.hivetech.lifeos'),
+                    TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.vishalkarpe.lifeos'),
                     MarkerLayer(markers: [
                       Marker(
                         point: LatLng((_foundLocation!['latitude'] as num).toDouble(), (_foundLocation!['longitude'] as num).toDouble()),
