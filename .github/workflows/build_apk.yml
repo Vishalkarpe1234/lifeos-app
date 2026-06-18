@@ -81,14 +81,23 @@ jobs:
           echo "Universal APK built:"
           ls -lh build/app/outputs/flutter-apk/app-release.apk
 
+      - name: Rename APKs to vk-os
+        run: |
+          cd build/app/outputs/flutter-apk/
+          mv app-arm64-v8a-release.apk   vk-os-arm64.apk   2>/dev/null || true
+          mv app-armeabi-v7a-release.apk vk-os-arm32.apk   2>/dev/null || true
+          mv app-release.apk             vk-os.apk          2>/dev/null || true
+          echo "Renamed APKs:"
+          ls -lh
+
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: VK-OS-APK-${{ github.run_number }}
+          name: vk-os-${{ github.run_number }}
           path: |
-            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
-            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/vk-os-arm64.apk
+            build/app/outputs/flutter-apk/vk-os-arm32.apk
+            build/app/outputs/flutter-apk/vk-os.apk
           retention-days: 90
 
       - name: Create GitHub Release
@@ -98,27 +107,41 @@ jobs:
           tag: "v1.0.${{ github.run_number }}"
           name: "VK OS v1.0.${{ github.run_number }}"
           body: |
-            ## VK OS - Your Life, Organized, Intelligent.
+            ## VK OS — Your Life, Organized, Intelligent.
+            ### by Vishal Karpe | HiveTech
 
-            ### Install on Android:
-            1. Download `app-arm64-v8a-release.apk` (modern phones, 64-bit — recommended)
-            2. Or `app-armeabi-v7a-release.apk` (older phones, 32-bit)
-            3. On your phone: Settings → Security → Enable **Install from unknown sources**
-            4. Open the downloaded APK and install
-            5. Backend is live at: https://vishalos-backend.onrender.com
+            ---
 
-            ### What's in this build:
-            - Clean Notes app: add, edit, delete, pin, search notes
-            - Profile: change password, change email, delete account
-            - Admin panel: manage users, view all notes (admin only)
-            - White background, black text — clean and readable
-            - Backend: https://vishalos-backend.onrender.com
+            ### Install on Android
+            1. Download **`vk-os-arm64.apk`** (recommended — modern 64-bit phones)
+            2. Or **`vk-os-arm32.apk`** (older / 32-bit phones)
+            3. Or **`vk-os.apk`** (universal — works on all phones, larger file)
+            4. On your phone: Settings → Security → **Install from unknown sources** → Enable
+            5. Open the downloaded `.apk` and tap Install
 
-            **Built with Flutter 3.32.4 | Release signed APK**
+            ---
+
+            ### What's in this build
+            - **Smart Notes** — add, edit, pin, search, delete notes
+            - **Live Location Tracking** — real-time GPS stream (updates every 5 m of movement)
+            - **Location History** — view all past locations on map; find by date & time
+            - **Profile** — change username, email, password; delete account
+            - **Admin Panel** (hivetech1010@gmail.com only)
+              - Live map of every user's location — auto-refreshes every 30 s
+              - Location playback by time slider
+              - Find user location at a specific date/time
+              - Edit user (username, email, password, active status)
+              - Delete single or multiple users
+            - **One-time location permission** — asked once at registration/first login
+
+            ---
+
+            **Backend:** https://vishalos-backend.onrender.com
+            **Built with Flutter 3.32.4 | Signed Release APK**
           artifacts: |
-            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
-            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/vk-os-arm64.apk
+            build/app/outputs/flutter-apk/vk-os-arm32.apk
+            build/app/outputs/flutter-apk/vk-os.apk
           makeLatest: true
           allowUpdates: true
           token: ${{ secrets.GITHUB_TOKEN }}

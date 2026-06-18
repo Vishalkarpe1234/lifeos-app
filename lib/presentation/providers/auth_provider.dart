@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:dio/dio.dart';
 import 'package:lifeos/core/constants/app_constants.dart';
 import 'package:lifeos/services/background_service.dart';
+import 'package:lifeos/services/location_service.dart';
 
 class AuthState {
   final String? token;
@@ -22,6 +23,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
   final _s = const FlutterSecureStorage();
   AuthNotifier() : super(const AuthState()) { _load(); }
 
+  // Creates a Dio that auto-attaches the stored auth token — used for location posts.
+  static Dio _locDio() {
+    final dio = Dio(BaseOptions(
+      baseUrl: AppConstants.baseUrl,
+      connectTimeout: const Duration(seconds: 12),
+      receiveTimeout: const Duration(seconds: 15),
+    ));
+    dio.interceptors.add(InterceptorsWrapper(
+      onRequest: (opts, handler) async {
+        final t = await const FlutterSecureStorage().read(key: AppConstants.keyToken);
+        if (t != null) opts.headers['Authorization'] = 'Bearer $t';
+        handler.next(opts);
+      },
+    ));
+    return dio;
+  }
+
   Future<void> _load() async {
     final t = await _s.read(key: AppConstants.keyToken);
     final e = await _s.read(key: AppConstants.keyEmail);
@@ -29,6 +47,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (t != null) {
       state = AuthState(token: t, email: e, isAdmin: a == 'true');
       initializeBackgroundService();
+      // Resume location stream (foreground GPS) on app restart
+      LocationService.resumeIfGranted(_locDio());
     }
   }
 
@@ -47,6 +67,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _s.write(key: AppConstants.keyIsAdmin, value: isAdmin.toString());
       state = AuthState(token: token, email: email.trim().toLowerCase(), isAdmin: isAdmin);
       initializeBackgroundService();
+      // Start location stream after successful login
+      LocationService.resumeIfGranted(_locDio());
       return true;
     } on DioException catch (e) {
       String msg = 'Login failed';
@@ -57,6 +79,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    LocationService.stop(); // stop GPS stream (keeps permission flag for next login)
     await stopBackgroundService();
     await _s.deleteAll();
     state = const AuthState();
