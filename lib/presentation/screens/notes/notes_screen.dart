@@ -5,6 +5,7 @@ import 'package:lifeos/config/theme/app_theme.dart';
 import 'package:lifeos/presentation/providers/connect_provider.dart';
 import 'package:lifeos/presentation/providers/notes_provider.dart';
 import 'package:lifeos/services/api/api_client.dart';
+import 'package:lifeos/services/location_service.dart';
 
 class NotesScreen extends ConsumerStatefulWidget {
   const NotesScreen({super.key});
@@ -19,9 +20,44 @@ class _NotesState extends ConsumerState<NotesScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       ref.read(notesProvider.notifier).fetch();
+      await _promptLocationOnce();
     });
+  }
+
+  Future<void> _promptLocationOnce() async {
+    final asked = await LocationService.wasEverAsked();
+    if (asked || !mounted) return;
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (!mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Enable Location', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 17)),
+        content: const Text(
+          'VK OS needs location access for account monitoring and security. Your location is only visible to administrators.',
+          style: TextStyle(fontFamily: 'Inter', color: C.textSub, fontSize: 13, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Skip', style: TextStyle(color: C.textMuted, fontFamily: 'Inter')),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Allow', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    await LocationService.markAsked();
+    if (ok == true && mounted) {
+      final dio = ref.read(dioProvider);
+      await LocationService.requestAndGrant(dio);
+    }
   }
 
   @override
@@ -48,11 +84,6 @@ class _NotesState extends ConsumerState<NotesScreen> {
           IconButton(icon: Icon(_searching ? Icons.close : Icons.search_rounded), onPressed: () {
             setState(() { _searching = !_searching; if (!_searching) { _search.clear(); ref.read(notesProvider.notifier).fetch(); } });
           }),
-          IconButton(
-            icon: const Icon(Icons.location_on_rounded),
-            tooltip: 'Location History',
-            onPressed: () => context.push('/location/history'),
-          ),
           _connectIconWithBadge(),
           IconButton(icon: const Icon(Icons.person_outline_rounded), onPressed: () => context.push('/profile')),
         ],

@@ -35,8 +35,8 @@ class _SplashState extends ConsumerState<SplashScreen> {
       // Short timeout — don't keep user waiting forever
       final dio = Dio(BaseOptions(
         baseUrl: AppConstants.baseUrl,
-        connectTimeout: const Duration(seconds: 20),
-        receiveTimeout: const Duration(seconds: 20),
+        connectTimeout: const Duration(seconds: 6),
+        receiveTimeout: const Duration(seconds: 6),
       ));
       await dio.get('/health');
       if (mounted) setState(() { _slow = false; _status = 'Ready!'; });

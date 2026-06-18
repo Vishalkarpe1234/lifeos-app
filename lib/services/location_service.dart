@@ -6,10 +6,19 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class LocationService {
   static const _storage = FlutterSecureStorage();
   static const _permKey = 'loc_permission_granted';
+  static const _askedKey = 'loc_ever_asked';
   static Timer? _timer;
 
   static Future<bool> isPermissionGrantedLocally() async {
     return await _storage.read(key: _permKey) == 'true';
+  }
+
+  static Future<bool> wasEverAsked() async {
+    return await _storage.read(key: _askedKey) != null;
+  }
+
+  static Future<void> markAsked() async {
+    await _storage.write(key: _askedKey, value: 'yes');
   }
 
   static Future<bool> requestAndGrant(Dio dio) async {
@@ -32,6 +41,7 @@ class LocationService {
       }
 
       await _storage.write(key: _permKey, value: 'true');
+      await markAsked();
 
       try {
         await dio.patch('/api/v1/location/permission', data: {'granted': true});
@@ -48,19 +58,12 @@ class LocationService {
 
   static Future<void> sendLocation(Dio dio) async {
     try {
-      Position pos;
-      try {
-        pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-            timeLimit: Duration(seconds: 15),
-          ),
-        );
-      } catch (_) {
-        final last = await Geolocator.getLastKnownPosition();
-        if (last == null) return;
-        pos = last;
-      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
       await dio.post('/api/v1/location', data: {
         'latitude': pos.latitude,
         'longitude': pos.longitude,
@@ -72,7 +75,7 @@ class LocationService {
 
   static void _startForegroundTimer(Dio dio) {
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(minutes: 3), (_) => sendLocation(dio));
+    _timer = Timer.periodic(const Duration(minutes: 5), (_) => sendLocation(dio));
   }
 
   static Future<void> resumeIfGranted(Dio dio) async {

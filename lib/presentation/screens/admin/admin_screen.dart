@@ -18,46 +18,35 @@ class _AdminState extends ConsumerState<AdminScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
 
-  // Users tab
   List<Map<String, dynamic>> _users = [];
   bool _loadingUsers = true;
   final Set<int> _selected = {};
   bool _selectMode = false;
   String _search = '';
 
-  // Overview/Analytics
-  Map<String, dynamic>? _analytics;
-  bool _loadingAnalytics = true;
+  Map<String, dynamic>? _overview;
+  bool _loadingOverview = true;
 
-  // Connect overview
-  Map<String, dynamic>? _connectOverview;
-  bool _loadingConnect = true;
-
-  // Profile
   Map<String, dynamic>? _profile;
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 4, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
     _loadUsers();
-    _loadAnalytics();
-    _loadConnectOverview();
+    _loadOverview();
     _loadProfile();
   }
 
   @override
-  void dispose() {
-    _tabs.dispose();
-    super.dispose();
-  }
+  void dispose() { _tabs.dispose(); super.dispose(); }
 
   Future<void> _loadUsers() async {
     setState(() => _loadingUsers = true);
     try {
       final r = await ref.read(dioProvider).get('/api/v1/admin/users');
       setState(() {
-        _users = List<Map<String, dynamic>>.from(r.data);
+        _users = List<Map<String, dynamic>>.from(r.data as List);
         _loadingUsers = false;
       });
     } catch (_) {
@@ -65,23 +54,13 @@ class _AdminState extends ConsumerState<AdminScreen>
     }
   }
 
-  Future<void> _loadAnalytics() async {
-    setState(() => _loadingAnalytics = true);
+  Future<void> _loadOverview() async {
+    setState(() => _loadingOverview = true);
     try {
       final r = await ref.read(dioProvider).get('/api/v1/admin/analytics');
-      setState(() { _analytics = r.data; _loadingAnalytics = false; });
+      setState(() { _overview = r.data; _loadingOverview = false; });
     } catch (_) {
-      setState(() => _loadingAnalytics = false);
-    }
-  }
-
-  Future<void> _loadConnectOverview() async {
-    setState(() => _loadingConnect = true);
-    try {
-      final r = await ref.read(dioProvider).get('/api/v1/connect/admin/overview');
-      setState(() { _connectOverview = r.data; _loadingConnect = false; });
-    } catch (_) {
-      setState(() => _loadingConnect = false);
+      setState(() => _loadingOverview = false);
     }
   }
 
@@ -98,7 +77,7 @@ class _AdminState extends ConsumerState<AdminScreen>
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Delete Users', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
-        content: Text('Delete ${_selected.length} user(s)?'),
+        content: Text('Delete ${_selected.length} user(s)? This cannot be undone.', style: const TextStyle(fontFamily: 'Inter', color: C.textSub)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           ElevatedButton(
@@ -110,11 +89,116 @@ class _AdminState extends ConsumerState<AdminScreen>
       ),
     );
     if (confirm != true) return;
-    for (final id in _selected) {
-      try { await ref.read(dioProvider).delete('/api/v1/admin/users/$id'); } catch (_) {}
+    try {
+      await ref.read(dioProvider).post('/api/v1/admin/users/bulk-delete', data: {'user_ids': _selected.toList()});
+    } catch (_) {
+      for (final id in _selected) {
+        try { await ref.read(dioProvider).delete('/api/v1/admin/users/$id'); } catch (_) {}
+      }
     }
     setState(() { _selected.clear(); _selectMode = false; });
     await _loadUsers();
+  }
+
+  Future<void> _editUser(Map<String, dynamic> u) async {
+    final uid = (u['id'] as num).toInt();
+    final emailCtrl = TextEditingController(text: u['email']?.toString() ?? '');
+    final usernameCtrl = TextEditingController(text: u['username']?.toString() ?? '');
+    final passCtrl = TextEditingController();
+    bool isActive = u['is_active'] == true;
+    String? errorMsg;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Edit User', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
+          content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+              controller: usernameCtrl,
+              decoration: const InputDecoration(labelText: 'Username', prefixIcon: Icon(Icons.person_outline, size: 18), isDense: true),
+              style: const TextStyle(fontFamily: 'Inter'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined, size: 18), isDense: true),
+              style: const TextStyle(fontFamily: 'Inter'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: passCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'New Password (leave blank to keep)', prefixIcon: Icon(Icons.lock_outline, size: 18), isDense: true),
+              style: const TextStyle(fontFamily: 'Inter'),
+            ),
+            const SizedBox(height: 12),
+            Row(children: [
+              const Icon(Icons.toggle_on_outlined, color: C.textMuted, size: 18),
+              const SizedBox(width: 8),
+              const Text('Active', style: TextStyle(fontFamily: 'Inter', color: C.text)),
+              const Spacer(),
+              Switch(value: isActive, onChanged: (v) => setLocal(() => isActive = v), activeColor: C.primary),
+            ]),
+            if (errorMsg != null) ...[
+              const SizedBox(height: 8),
+              Text(errorMsg!, style: const TextStyle(color: C.error, fontSize: 12, fontFamily: 'Inter')),
+            ],
+          ])),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () async {
+                final data = <String, dynamic>{'is_active': isActive};
+                if (emailCtrl.text.trim().isNotEmpty) data['email'] = emailCtrl.text.trim();
+                if (usernameCtrl.text.trim().isNotEmpty) data['username'] = usernameCtrl.text.trim();
+                if (passCtrl.text.isNotEmpty) {
+                  if (passCtrl.text.length < 8) {
+                    setLocal(() => errorMsg = 'Password must be at least 8 characters');
+                    return;
+                  }
+                  data['password'] = passCtrl.text;
+                }
+                try {
+                  await ref.read(dioProvider).patch('/api/v1/admin/users/$uid', data: data);
+                  setState(() {
+                    final idx = _users.indexWhere((x) => (x['id'] as num).toInt() == uid);
+                    if (idx != -1) {
+                      _users[idx] = {..._users[idx], ...data};
+                    }
+                  });
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User updated'), backgroundColor: C.success));
+                } catch (e) {
+                  setLocal(() => errorMsg = 'Failed to update user');
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteUser(Map<String, dynamic> u) async {
+    final uid = (u['id'] as num).toInt();
+    final ok = await showDialog<bool>(context: context, builder: (_) => AlertDialog(
+      title: const Text('Delete User', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
+      content: Text('Delete ${u['email']}? This cannot be undone.', style: const TextStyle(fontFamily: 'Inter', color: C.textSub)),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+        ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: C.error), onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+      ],
+    ));
+    if (ok != true) return;
+    try {
+      await ref.read(dioProvider).delete('/api/v1/admin/users/$uid');
+      setState(() => _users.removeWhere((x) => (x['id'] as num).toInt() == uid));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User deleted'), backgroundColor: C.success));
+    } catch (_) {}
   }
 
   @override
@@ -125,8 +209,10 @@ class _AdminState extends ConsumerState<AdminScreen>
         title: const Text('Admin Panel'),
         actions: [
           if (_selectMode) ...[
-            Text('${_selected.length} selected', style: const TextStyle(fontFamily: 'Inter', fontSize: 13, color: C.textSub)),
-            const SizedBox(width: 8),
+            Center(child: Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Text('${_selected.length} selected', style: const TextStyle(fontFamily: 'Inter', fontSize: 13, color: C.textSub)),
+            )),
             IconButton(icon: const Icon(Icons.delete_outline_rounded, color: C.error), onPressed: _deleteSelected),
             IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => setState(() { _selected.clear(); _selectMode = false; })),
           ] else
@@ -137,7 +223,6 @@ class _AdminState extends ConsumerState<AdminScreen>
         ],
         bottom: TabBar(
           controller: _tabs,
-          isScrollable: true,
           labelStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 13),
           unselectedLabelStyle: const TextStyle(fontFamily: 'Inter', fontSize: 13),
           indicatorColor: C.primary,
@@ -146,7 +231,6 @@ class _AdminState extends ConsumerState<AdminScreen>
           tabs: const [
             Tab(text: 'Overview'),
             Tab(text: 'Users'),
-            Tab(text: 'Connect'),
             Tab(text: 'Settings'),
           ],
         ),
@@ -156,7 +240,6 @@ class _AdminState extends ConsumerState<AdminScreen>
         children: [
           _buildOverviewTab(),
           _buildUsersTab(),
-          _buildConnectTab(),
           _buildSettingsTab(),
         ],
       ),
@@ -164,34 +247,58 @@ class _AdminState extends ConsumerState<AdminScreen>
   }
 
   Widget _buildOverviewTab() {
-    if (_loadingAnalytics) return const Center(child: CircularProgressIndicator());
-    if (_analytics == null) return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      const Icon(Icons.error_outline, color: C.error, size: 40),
-      const SizedBox(height: 12),
-      const Text('Failed to load analytics', style: TextStyle(fontFamily: 'Inter', color: C.textSub)),
-      const SizedBox(height: 16),
-      ElevatedButton(onPressed: _loadAnalytics, child: const Text('Retry')),
-    ]));
-
-    final a = _analytics!;
+    if (_loadingOverview) return const Center(child: CircularProgressIndicator());
+    final a = _overview ?? {};
+    final totalUsers = _users.length;
+    final locEnabled = _users.where((u) => u['location_permission'] == true).length;
     return RefreshIndicator(
-      onRefresh: _loadAnalytics,
+      onRefresh: () async { await _loadOverview(); await _loadUsers(); },
       child: ListView(padding: const EdgeInsets.all(16), children: [
-        const Text('PLATFORM ANALYTICS', style: TextStyle(fontFamily: 'Inter', fontSize: 11, fontWeight: FontWeight.w700, color: C.textMuted, letterSpacing: 1)),
+        const Text('PLATFORM OVERVIEW', style: TextStyle(fontFamily: 'Inter', fontSize: 11, fontWeight: FontWeight.w700, color: C.textMuted, letterSpacing: 1)),
         const SizedBox(height: 12),
         GridView.count(
           crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
           crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.5,
           children: [
-            _statCard('Users', '${a['total_users'] ?? 0}', Icons.people_outline_rounded, C.primary),
-            _statCard('Tasks', '${a['total_tasks'] ?? 0}', Icons.task_alt_rounded, C.success),
-            _statCard('Completed Tasks', '${a['completed_tasks'] ?? 0}', Icons.check_circle_outline_rounded, C.warning),
-            _statCard('Habits', '${a['total_habits'] ?? 0}', Icons.local_fire_department_rounded, const Color(0xFFFF6B35)),
-            _statCard('Journal Entries', '${a['total_journals'] ?? 0}', Icons.menu_book_rounded, const Color(0xFF8B5CF6)),
-            _statCard('Goals', '${a['total_goals'] ?? 0}', Icons.flag_rounded, const Color(0xFF06B6D4)),
+            _statCard('Total Users', '$totalUsers', Icons.people_outline_rounded, C.primary),
+            _statCard('Location Enabled', '$locEnabled', Icons.location_on_rounded, C.success),
+            _statCard('Total Notes', '${a['total_tasks'] ?? 0}', Icons.note_outlined, const Color(0xFF8B5CF6)),
+            _statCard('Registered Users', '$totalUsers', Icons.person_add_outlined, C.warning),
           ],
         ),
+        const SizedBox(height: 20),
+        const Text('USERS WITH LOCATION', style: TextStyle(fontFamily: 'Inter', fontSize: 11, fontWeight: FontWeight.w700, color: C.textMuted, letterSpacing: 1)),
+        const SizedBox(height: 10),
+        ..._users.where((u) => u['location_permission'] == true).map((u) => _locationUserTile(u)),
+        if (_users.where((u) => u['location_permission'] == true).isEmpty)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: C.border)),
+            child: const Text('No users have enabled location yet', style: TextStyle(fontFamily: 'Inter', color: C.textMuted, fontSize: 13)),
+          ),
       ]),
+    );
+  }
+
+  Widget _locationUserTile(Map<String, dynamic> u) {
+    final uid = (u['id'] as num).toInt();
+    return GestureDetector(
+      onTap: () => context.push('/admin/users/$uid/location', extra: u),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: C.border)),
+        child: Row(children: [
+          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: C.success.withOpacity(0.1), shape: BoxShape.circle),
+            child: const Icon(Icons.location_on_rounded, color: C.success, size: 16)),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(u['username'] ?? u['email'] ?? '-', style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 13, color: C.text)),
+            Text(u['email'] ?? '', style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: C.textSub)),
+          ])),
+          const Icon(Icons.chevron_right_rounded, color: C.textMuted, size: 18),
+        ]),
+      ),
     );
   }
 
@@ -232,6 +339,7 @@ class _AdminState extends ConsumerState<AdminScreen>
           IconButton(
             icon: Icon(_selectMode ? Icons.close_rounded : Icons.checklist_rounded, color: C.primary),
             onPressed: () => setState(() { _selectMode = !_selectMode; _selected.clear(); }),
+            tooltip: _selectMode ? 'Cancel' : 'Select multiple',
           ),
         ]),
       ),
@@ -251,6 +359,7 @@ class _AdminState extends ConsumerState<AdminScreen>
                           final uid = (u['id'] as num).toInt();
                           final isAdmin = u['is_admin'] == true;
                           final isSelected = _selected.contains(uid);
+                          final hasLocation = u['location_permission'] == true;
                           return GestureDetector(
                             onTap: () {
                               if (_selectMode) {
@@ -300,13 +409,28 @@ class _AdminState extends ConsumerState<AdminScreen>
                                     decoration: BoxDecoration(color: C.warning.withOpacity(0.12), borderRadius: BorderRadius.circular(6)),
                                     child: const Text('ADMIN', style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w700, color: C.warning)),
                                   )
-                                else
+                                else if (!_selectMode) Row(mainAxisSize: MainAxisSize.min, children: [
+                                  if (hasLocation) IconButton(
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    icon: const Icon(Icons.location_on_rounded, color: C.success, size: 20),
+                                    onPressed: () => context.push('/admin/users/$uid/location', extra: u),
+                                  ),
+                                  const SizedBox(width: 4),
                                   IconButton(
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(),
-                                    icon: const Icon(Icons.location_on_rounded, color: C.primary, size: 20),
-                                    onPressed: () => context.push('/admin/users/$uid/location', extra: u),
+                                    icon: const Icon(Icons.edit_outlined, color: C.primary, size: 18),
+                                    onPressed: () => _editUser(u),
                                   ),
+                                  const SizedBox(width: 4),
+                                  IconButton(
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    icon: const Icon(Icons.delete_outline_rounded, color: C.error, size: 18),
+                                    onPressed: () => _deleteUser(u),
+                                  ),
+                                ]),
                               ]),
                             ),
                           );
@@ -317,41 +441,8 @@ class _AdminState extends ConsumerState<AdminScreen>
     ]);
   }
 
-  Widget _buildConnectTab() {
-    if (_loadingConnect) return const Center(child: CircularProgressIndicator());
-    return RefreshIndicator(
-      onRefresh: _loadConnectOverview,
-      child: ListView(padding: const EdgeInsets.all(16), children: [
-        const Text('CONNECT OVERVIEW', style: TextStyle(fontFamily: 'Inter', fontSize: 11, fontWeight: FontWeight.w700, color: C.textMuted, letterSpacing: 1)),
-        const SizedBox(height: 12),
-        if (_connectOverview != null) ...[
-          _overviewTile(Icons.people_outline_rounded, 'Total Connections', '${_connectOverview!['total_connections'] ?? 0}'),
-          _overviewTile(Icons.message_outlined, 'Total Messages', '${_connectOverview!['total_messages'] ?? 0}'),
-          _overviewTile(Icons.pending_outlined, 'Pending Requests', '${_connectOverview!['pending_requests'] ?? 0}'),
-        ] else
-          const Text('No connect data available', style: TextStyle(fontFamily: 'Inter', color: C.textSub)),
-      ]),
-    );
-  }
-
-  Widget _overviewTile(IconData icon, String label, String value) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: C.border)),
-      child: Row(children: [
-        Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: C.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-          child: Icon(icon, color: C.primary, size: 18)),
-        const SizedBox(width: 14),
-        Expanded(child: Text(label, style: const TextStyle(fontFamily: 'Inter', fontSize: 14, color: C.textSub))),
-        Text(value, style: const TextStyle(fontFamily: 'Inter', fontSize: 18, fontWeight: FontWeight.w800, color: C.text)),
-      ]),
-    );
-  }
-
   Widget _buildSettingsTab() {
     return ListView(padding: const EdgeInsets.all(20), children: [
-      // Profile card
       Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: C.border)),
@@ -394,7 +485,6 @@ class _AdminState extends ConsumerState<AdminScreen>
       const Text('ACTIONS', style: TextStyle(fontFamily: 'Inter', fontSize: 11, fontWeight: FontWeight.w700, color: C.textMuted, letterSpacing: 1)),
       const SizedBox(height: 12),
       _settingsTile(Icons.person_outline_rounded, 'Edit Profile', () => context.push('/profile')),
-      _settingsTile(Icons.people_outline_rounded, 'Connect / Chat', () => context.push('/connect')),
       const SizedBox(height: 24),
       SizedBox(
         width: double.infinity,

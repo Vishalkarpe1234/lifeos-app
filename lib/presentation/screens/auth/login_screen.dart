@@ -21,7 +21,7 @@ class _LoginState extends ConsumerState<LoginScreen> {
   void dispose() { _email.dispose(); _pass.dispose(); super.dispose(); }
 
   void _setAdmin() {
-    setState(() { _adminMode = true; _email.text = 'hivetech1010@gmail.com'; _pass.clear(); });
+    setState(() { _adminMode = true; _email.clear(); _pass.clear(); });
   }
 
   Future<void> _login() async {
