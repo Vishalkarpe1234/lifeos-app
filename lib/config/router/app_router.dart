@@ -14,16 +14,7 @@ import 'package:lifeos/presentation/screens/admin/admin_user_detail_screen.dart'
 import 'package:lifeos/presentation/screens/admin/admin_location_screen.dart';
 import 'package:lifeos/presentation/screens/connect/connect_screen.dart';
 import 'package:lifeos/presentation/screens/connect/chat_screen.dart';
-import 'package:lifeos/presentation/screens/shell/main_shell.dart';
-import 'package:lifeos/presentation/screens/dashboard/dashboard_screen.dart';
-import 'package:lifeos/presentation/screens/tasks/tasks_screen.dart';
-import 'package:lifeos/presentation/screens/habits/habits_screen.dart';
-import 'package:lifeos/presentation/screens/journal/journal_screen.dart';
-import 'package:lifeos/presentation/screens/goals/goals_screen.dart';
-import 'package:lifeos/presentation/screens/projects/projects_screen.dart';
-import 'package:lifeos/presentation/screens/focus/focus_screen.dart';
-import 'package:lifeos/presentation/screens/snippets/snippets_screen.dart';
-import 'package:lifeos/presentation/screens/analytics/analytics_screen.dart';
+import 'package:lifeos/presentation/screens/location/location_history_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authProvider);
@@ -33,8 +24,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       final loc = state.matchedLocation;
       final open = ['/login', '/register', '/'];
       if (!auth.loggedIn && !open.contains(loc)) return '/login';
-      if (auth.loggedIn && (loc == '/login' || loc == '/register' || loc == '/')) {
-        return auth.isAdmin ? '/admin' : '/dashboard';
+      if (auth.loggedIn && open.contains(loc)) {
+        return auth.isAdmin ? '/admin' : '/notes';
       }
       return null;
     },
@@ -42,8 +33,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/', builder: (_, __) => const SplashScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
-
-      // Admin routes — outside shell
+      GoRoute(path: '/notes', builder: (_, __) => const NotesScreen()),
+      GoRoute(path: '/notes/new', builder: (_, __) => const NoteEditorScreen()),
+      GoRoute(
+        path: '/notes/:id/edit',
+        builder: (_, s) => NoteEditorScreen(note: s.extra as Note?),
+      ),
+      GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
       GoRoute(path: '/admin', builder: (_, __) => const AdminScreen()),
       GoRoute(
         path: '/admin/users/:id',
@@ -59,78 +55,17 @@ final routerProvider = Provider<GoRouter>((ref) {
           userEmail: (s.extra as Map<String, dynamic>?)?['email']?.toString() ?? '',
         ),
       ),
-
-      // Shell routes with bottom nav
-      ShellRoute(
-        builder: (context, state, child) => MainShell(
-          child: child,
-          location: state.matchedLocation,
+      GoRoute(path: '/connect', builder: (_, __) => const ConnectScreen()),
+      GoRoute(
+        path: '/connect/chat/:friendId',
+        builder: (_, s) => ChatScreen(
+          friendId: int.parse(s.pathParameters['friendId']!),
+          friend: s.extra as Map<String, dynamic>?,
         ),
-        routes: [
-          GoRoute(
-            path: '/dashboard',
-            builder: (_, __) => const DashboardScreen(),
-          ),
-          GoRoute(
-            path: '/tasks',
-            builder: (_, __) => const TasksScreen(),
-          ),
-          GoRoute(
-            path: '/habits',
-            builder: (_, __) => const HabitsScreen(),
-          ),
-          GoRoute(
-            path: '/journal',
-            builder: (_, __) => const JournalScreen(),
-          ),
-          GoRoute(
-            path: '/goals',
-            builder: (_, __) => const GoalsScreen(),
-          ),
-          GoRoute(
-            path: '/projects',
-            builder: (_, __) => const ProjectsScreen(),
-          ),
-          GoRoute(
-            path: '/focus',
-            builder: (_, __) => const FocusScreen(),
-          ),
-          GoRoute(
-            path: '/snippets',
-            builder: (_, __) => const SnippetsScreen(),
-          ),
-          GoRoute(
-            path: '/analytics',
-            builder: (_, __) => const AnalyticsScreen(),
-          ),
-          GoRoute(
-            path: '/notes',
-            builder: (_, __) => const NotesScreen(),
-          ),
-          GoRoute(
-            path: '/notes/new',
-            builder: (_, __) => const NoteEditorScreen(),
-          ),
-          GoRoute(
-            path: '/notes/:id/edit',
-            builder: (_, s) => NoteEditorScreen(note: s.extra as Note?),
-          ),
-          GoRoute(
-            path: '/connect',
-            builder: (_, __) => const ConnectScreen(),
-          ),
-          GoRoute(
-            path: '/connect/chat/:friendId',
-            builder: (_, s) => ChatScreen(
-              friendId: int.parse(s.pathParameters['friendId']!),
-              friend: s.extra as Map<String, dynamic>?,
-            ),
-          ),
-          GoRoute(
-            path: '/profile',
-            builder: (_, __) => const ProfileScreen(),
-          ),
-        ],
+      ),
+      GoRoute(
+        path: '/location/history',
+        builder: (_, __) => const LocationHistoryScreen(),
       ),
     ],
     errorBuilder: (_, state) => Scaffold(

@@ -111,6 +111,11 @@ class _NotesState extends ConsumerState<NotesScreen> {
           IconButton(icon: Icon(_searching ? Icons.close : Icons.search_rounded), onPressed: () {
             setState(() { _searching = !_searching; if (!_searching) { _search.clear(); ref.read(notesProvider.notifier).fetch(); } });
           }),
+          IconButton(
+            icon: const Icon(Icons.location_on_rounded),
+            tooltip: 'Location History',
+            onPressed: () => context.push('/location/history'),
+          ),
           _connectIconWithBadge(),
           IconButton(icon: const Icon(Icons.person_outline_rounded), onPressed: () => context.push('/profile')),
         ],
