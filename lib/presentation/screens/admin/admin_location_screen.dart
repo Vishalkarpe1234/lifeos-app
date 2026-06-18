@@ -43,8 +43,8 @@ class _LocState extends ConsumerState<AdminLocationScreen> with SingleTickerProv
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
     _load();
-    // Refresh every 1 minute — user sends every 5 min, so 1 min is responsive enough
-    _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) => _load(silent: true));
+    // Refresh every 30 s — user's stream sends on movement, so 30 s keeps admin view fresh
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) => _load(silent: true));
   }
 
   @override

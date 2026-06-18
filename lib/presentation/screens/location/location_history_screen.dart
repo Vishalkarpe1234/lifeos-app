@@ -39,6 +39,7 @@ class _LocationHistoryScreenState
   DateTime? _lastUpdated;
   bool _permissionGranted = false;
   bool _trackingEnabled = false;
+  StreamSubscription<Position>? _liveStream;
 
   // Geocode cache: item id -> address string
   final Map<int, String> _addressCache = {};
@@ -62,13 +63,43 @@ class _LocationHistoryScreenState
   Future<void> _checkPermissionAndLoad() async {
     final granted = await LocationService.isPermissionGrantedLocally();
     if (mounted) setState(() => _permissionGranted = granted);
-    if (granted) _getLiveLocation();
+    if (granted) {
+      _getLiveLocation(); // hard fix immediately
+      _startLiveStream(); // then stream continuously
+    }
+  }
+
+  /// Starts a GPS position stream that updates the map in real-time.
+  void _startLiveStream() {
+    _liveStream?.cancel();
+    _liveStream = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5, // update map on every 5 m of movement
+      ),
+    ).listen(
+      (pos) {
+        if (!mounted) return;
+        setState(() {
+          _currentPosition = pos;
+          _lastUpdated = DateTime.now();
+          _loadingLive = false;
+        });
+        try {
+          _mapController.move(
+              LatLng(pos.latitude, pos.longitude), _mapController.camera.zoom);
+        } catch (_) {}
+      },
+      onError: (_) {},
+      cancelOnError: false,
+    );
   }
 
   @override
   void dispose() {
     _tabs.dispose();
     _geocodeTimer?.cancel();
+    _liveStream?.cancel();
     super.dispose();
   }
 
@@ -78,22 +109,50 @@ class _LocationHistoryScreenState
       final dio = ref.read(dioProvider);
       final ok = await LocationService.requestAndGrant(dio);
       if (mounted) {
-        setState(() { _permissionGranted = ok; _trackingEnabled = ok; _loadingLive = false; });
-        if (ok) _getLiveLocation();
+        setState(() {
+          _permissionGranted = ok;
+          _trackingEnabled = ok;
+          _loadingLive = false;
+        });
+        if (ok) {
+          _getLiveLocation();
+          _startLiveStream();
+        }
       }
     } catch (_) {
       if (mounted) setState(() => _loadingLive = false);
     }
   }
 
+  /// Hard refresh: forces a fresh GPS fix and centres the map.
   Future<void> _getLiveLocation() async {
-    if (!_permissionGranted) { _requestPermissionAndTrack(); return; }
+    if (!_permissionGranted) {
+      _requestPermissionAndTrack();
+      return;
+    }
     setState(() => _loadingLive = true);
+
+    // Try last-known first so map shows something quickly
+    try {
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null && mounted) {
+        setState(() {
+          _currentPosition = last;
+          _lastUpdated = DateTime.now();
+          _loadingLive = false;
+        });
+        try {
+          _mapController.move(LatLng(last.latitude, last.longitude), 15);
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    // Then get a fresh GPS fix (high accuracy, 30 s timeout)
     try {
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 15),
+          timeLimit: Duration(seconds: 30),
         ),
       );
       if (mounted) {
@@ -102,17 +161,12 @@ class _LocationHistoryScreenState
           _lastUpdated = DateTime.now();
           _loadingLive = false;
         });
-        try { _mapController.move(LatLng(pos.latitude, pos.longitude), 15); } catch (_) {}
+        try {
+          _mapController.move(LatLng(pos.latitude, pos.longitude), 15);
+        } catch (_) {}
       }
     } catch (_) {
-      final last = await Geolocator.getLastKnownPosition();
-      if (mounted) {
-        setState(() {
-          _currentPosition = last;
-          _lastUpdated = last != null ? DateTime.now() : null;
-          _loadingLive = false;
-        });
-      }
+      if (mounted) setState(() => _loadingLive = false);
     }
   }
 
@@ -394,7 +448,7 @@ class _LocationHistoryScreenState
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text(
-                'Location is saved every 3 minutes while the app is open. History and Find tabs show all past locations.',
+                'Map updates in real-time as you move. Location is saved automatically whenever you move 50 m or every 5 minutes.',
                 style: TextStyle(
                     fontFamily: 'Inter', fontSize: 11, color: C.textSub),
                 textAlign: TextAlign.center,

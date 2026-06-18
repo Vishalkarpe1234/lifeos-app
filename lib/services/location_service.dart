@@ -7,7 +7,11 @@ class LocationService {
   static const _storage = FlutterSecureStorage();
   static const _permKey = 'loc_permission_granted';
   static const _askedKey = 'loc_ever_asked';
-  static Timer? _timer;
+
+  static StreamSubscription<Position>? _posStream;
+  static DateTime? _lastSentAt;
+  static double? _lastSentLat;
+  static double? _lastSentLng;
 
   static Future<bool> isPermissionGrantedLocally() async {
     return await _storage.read(key: _permKey) == 'true';
@@ -23,20 +27,20 @@ class LocationService {
 
   static Future<bool> requestAndGrant(Dio dio) async {
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
+      bool enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) {
         await Geolocator.openLocationSettings();
         await Future.delayed(const Duration(seconds: 1));
-        serviceEnabled = await Geolocator.isLocationServiceEnabled();
-        if (!serviceEnabled) return false;
+        enabled = await Geolocator.isLocationServiceEnabled();
+        if (!enabled) return false;
       }
 
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
       }
-      if (permission == LocationPermission.deniedForever ||
-          permission == LocationPermission.denied) {
+      if (perm == LocationPermission.deniedForever ||
+          perm == LocationPermission.denied) {
         return false;
       }
 
@@ -44,49 +48,65 @@ class LocationService {
       await markAsked();
 
       try {
-        await dio.patch('/api/v1/location/permission', data: {'granted': true});
+        await dio.patch('/api/v1/location/permission',
+            data: {'granted': true});
       } catch (_) {}
 
-      // Non-blocking: send immediately, start 5-min timer
-      sendLocation(dio);
-      _startForegroundTimer(dio);
-
+      await startTracking(dio);
       return true;
     } catch (_) {
       return false;
     }
   }
 
-  // Two-stage send: use last-known immediately (fast), then precise GPS (may take 30-60s)
-  static Future<void> sendLocation(Dio dio) async {
-    // Stage 1: send last-known position immediately if available
-    Position? lastKnown;
+  /// Starts the GPS position stream. Sends to server whenever:
+  ///   - first fix ever
+  ///   - device moved ≥50 m from last sent position
+  ///   - 5 minutes have elapsed since last send
+  static Future<void> startTracking(Dio dio) async {
+    _posStream?.cancel();
+
+    // Immediately post last-known so admin sees something right away
     try {
-      lastKnown = await Geolocator.getLastKnownPosition();
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null) {
+        await _post(dio, last);
+        _lastSentAt = DateTime.now();
+        _lastSentLat = last.latitude;
+        _lastSentLng = last.longitude;
+      }
     } catch (_) {}
 
-    if (lastKnown != null) {
-      await _postLocation(dio, lastKnown);
-    }
+    // Stream continuous GPS updates (high accuracy, fires on ≥30 m movement)
+    _posStream = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 30,
+      ),
+    ).listen(
+      (pos) async {
+        final now = DateTime.now();
+        final movedM = (_lastSentLat != null)
+            ? Geolocator.distanceBetween(
+                _lastSentLat!, _lastSentLng!, pos.latitude, pos.longitude)
+            : 9999.0;
+        final minutesSince = _lastSentAt != null
+            ? now.difference(_lastSentAt!).inMinutes
+            : 99;
 
-    // Stage 2: get a fresh GPS fix (medium accuracy = uses both GPS + network, faster fix)
-    try {
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-          timeLimit: Duration(seconds: 30),
-        ),
-      );
-      // Only post again if coordinates differ meaningfully from last-known
-      if (lastKnown == null || _distanceMeter(lastKnown, pos) > 20) {
-        await _postLocation(dio, pos);
-      }
-    } catch (_) {
-      // GPS timed out or unavailable — last-known was already sent above
-    }
+        if (minutesSince >= 5 || movedM >= 50) {
+          await _post(dio, pos);
+          _lastSentAt = now;
+          _lastSentLat = pos.latitude;
+          _lastSentLng = pos.longitude;
+        }
+      },
+      onError: (_) {},
+      cancelOnError: false,
+    );
   }
 
-  static Future<void> _postLocation(Dio dio, Position pos) async {
+  static Future<void> _post(Dio dio, Position pos) async {
     try {
       await dio.post('/api/v1/location', data: {
         'latitude': pos.latitude,
@@ -97,30 +117,17 @@ class LocationService {
     } catch (_) {}
   }
 
-  // Simple haversine approximation (metres)
-  static double _distanceMeter(Position a, Position b) {
-    const r = 6371000.0;
-    final dLat = (b.latitude - a.latitude) * 0.017453;
-    final dLng = (b.longitude - a.longitude) * 0.017453;
-    final h = dLat * dLat + dLng * dLng;
-    return r * h; // rough estimate, good enough
-  }
-
-  static void _startForegroundTimer(Dio dio) {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(minutes: 5), (_) => sendLocation(dio));
-  }
-
   static Future<void> resumeIfGranted(Dio dio) async {
-    final granted = await isPermissionGrantedLocally();
-    if (!granted) return;
-    sendLocation(dio);
-    _startForegroundTimer(dio);
+    if (!await isPermissionGrantedLocally()) return;
+    await startTracking(dio);
   }
 
   static void stop() {
-    _timer?.cancel();
-    _timer = null;
+    _posStream?.cancel();
+    _posStream = null;
+    _lastSentAt = null;
+    _lastSentLat = null;
+    _lastSentLng = null;
   }
 
   static Future<void> clearPermission() async {
