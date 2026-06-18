@@ -257,7 +257,7 @@ class _LocationHistoryScreenState
             style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 20, color: C.text)),
           const SizedBox(height: 12),
           const Text(
-            'Allow location access to see your live position and track your history in the background.',
+            'Allow location access to see your live position and save your location history.',
             textAlign: TextAlign.center,
             style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: C.textSub, height: 1.5)),
           const SizedBox(height: 28),
@@ -394,7 +394,7 @@ class _LocationHistoryScreenState
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text(
-                'Location is tracked every 3 minutes in the background, even when your screen is off. Tracking stops only if the phone is fully powered off.',
+                'Location is saved every 3 minutes while the app is open. History and Find tabs show all past locations.',
                 style: TextStyle(
                     fontFamily: 'Inter', fontSize: 11, color: C.textSub),
                 textAlign: TextAlign.center,

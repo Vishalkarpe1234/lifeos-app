@@ -2,13 +2,11 @@ import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:lifeos/services/background_service.dart';
 
 class LocationService {
   static const _storage = FlutterSecureStorage();
   static const _permKey = 'loc_permission_granted';
   static Timer? _timer;
-  static bool _serviceStarting = false;
 
   static Future<bool> isPermissionGrantedLocally() async {
     return await _storage.read(key: _permKey) == 'true';
@@ -39,27 +37,12 @@ class LocationService {
         await dio.patch('/api/v1/location/permission', data: {'granted': true});
       } catch (_) {}
 
-      // Send location once immediately (non-blocking)
       sendLocation(dio);
-
-      // Start background service ONCE
-      await _startServiceSafe();
+      _startForegroundTimer(dio);
 
       return true;
     } catch (_) {
       return false;
-    }
-  }
-
-  static Future<void> _startServiceSafe() async {
-    if (_serviceStarting) return;
-    _serviceStarting = true;
-    try {
-      await initializeBackgroundService();
-    } catch (_) {
-      // Background service failed to start — app still works without it
-    } finally {
-      _serviceStarting = false;
     }
   }
 
@@ -87,12 +70,16 @@ class LocationService {
     } catch (_) {}
   }
 
-  // Called when already have permission — resume tracking on app open
+  static void _startForegroundTimer(Dio dio) {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(minutes: 3), (_) => sendLocation(dio));
+  }
+
   static Future<void> resumeIfGranted(Dio dio) async {
     final granted = await isPermissionGrantedLocally();
     if (!granted) return;
-    sendLocation(dio); // non-blocking
-    await _startServiceSafe();
+    sendLocation(dio);
+    _startForegroundTimer(dio);
   }
 
   static void stop() {
@@ -103,6 +90,5 @@ class LocationService {
   static Future<void> clearPermission() async {
     await _storage.delete(key: _permKey);
     stop();
-    await stopBackgroundService();
   }
 }
