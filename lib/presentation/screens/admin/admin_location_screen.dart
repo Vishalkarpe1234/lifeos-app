@@ -80,7 +80,7 @@ class _LocState extends ConsumerState<AdminLocationScreen> with SingleTickerProv
   }
 
   void _moveMap(Map<String, dynamic> loc) {
-    try { _mapController.move(LatLng(loc['latitude'] as double, loc['longitude'] as double), _mapController.camera.zoom); } catch (_) {}
+    try { _mapController.move(LatLng((loc['latitude'] as num).toDouble(), (loc['longitude'] as num).toDouble()), _mapController.camera.zoom); } catch (_) {}
   }
 
   void _togglePlay() {
@@ -211,7 +211,7 @@ class _LocState extends ConsumerState<AdminLocationScreen> with SingleTickerProv
     }
 
     final selected = _chrono.isNotEmpty ? _chrono[_playIndex] : null;
-    final selectedLatLng = selected != null ? LatLng(selected['latitude'] as double, selected['longitude'] as double) : null;
+    final selectedLatLng = selected != null ? LatLng((selected['latitude'] as num).toDouble(), (selected['longitude'] as num).toDouble()) : null;
     final isLive = _chrono.isNotEmpty && _playIndex == _chrono.length - 1;
 
     return Column(children: [
@@ -223,7 +223,7 @@ class _LocState extends ConsumerState<AdminLocationScreen> with SingleTickerProv
             TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.hivetech.lifeos'),
             if (_chrono.length > 1) PolylineLayer(polylines: [
               Polyline(
-                points: _chrono.map((l) => LatLng(l['latitude'] as double, l['longitude'] as double)).toList(),
+                points: _chrono.map((l) => LatLng((l['latitude'] as num).toDouble(), (l['longitude'] as num).toDouble())).toList(),
                 color: C.primary.withOpacity(0.5), strokeWidth: 3,
               ),
             ]),
@@ -282,8 +282,8 @@ class _LocState extends ConsumerState<AdminLocationScreen> with SingleTickerProv
         itemCount: _locations.length,
         itemBuilder: (_, i) {
           final loc = _locations[i];
-          final lat = loc['latitude'] as double;
-          final lng = loc['longitude'] as double;
+          final lat = (loc['latitude'] as num).toDouble();
+          final lng = (loc['longitude'] as num).toDouble();
           return GestureDetector(
             onTap: () {
               _playTimer?.cancel();

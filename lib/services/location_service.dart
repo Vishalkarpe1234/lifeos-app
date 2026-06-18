@@ -47,6 +47,7 @@ class LocationService {
         await dio.patch('/api/v1/location/permission', data: {'granted': true});
       } catch (_) {}
 
+      // Non-blocking: send immediately, start 5-min timer
       sendLocation(dio);
       _startForegroundTimer(dio);
 
@@ -56,14 +57,37 @@ class LocationService {
     }
   }
 
+  // Two-stage send: use last-known immediately (fast), then precise GPS (may take 30-60s)
   static Future<void> sendLocation(Dio dio) async {
+    // Stage 1: send last-known position immediately if available
+    Position? lastKnown;
+    try {
+      lastKnown = await Geolocator.getLastKnownPosition();
+    } catch (_) {}
+
+    if (lastKnown != null) {
+      await _postLocation(dio, lastKnown);
+    }
+
+    // Stage 2: get a fresh GPS fix (medium accuracy = uses both GPS + network, faster fix)
     try {
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 15),
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 30),
         ),
       );
+      // Only post again if coordinates differ meaningfully from last-known
+      if (lastKnown == null || _distanceMeter(lastKnown, pos) > 20) {
+        await _postLocation(dio, pos);
+      }
+    } catch (_) {
+      // GPS timed out or unavailable — last-known was already sent above
+    }
+  }
+
+  static Future<void> _postLocation(Dio dio, Position pos) async {
+    try {
       await dio.post('/api/v1/location', data: {
         'latitude': pos.latitude,
         'longitude': pos.longitude,
@@ -71,6 +95,15 @@ class LocationService {
         'timestamp': DateTime.now().toUtc().toIso8601String(),
       });
     } catch (_) {}
+  }
+
+  // Simple haversine approximation (metres)
+  static double _distanceMeter(Position a, Position b) {
+    const r = 6371000.0;
+    final dLat = (b.latitude - a.latitude) * 0.017453;
+    final dLng = (b.longitude - a.longitude) * 0.017453;
+    final h = dLat * dLat + dLng * dLng;
+    return r * h; // rough estimate, good enough
   }
 
   static void _startForegroundTimer(Dio dio) {
