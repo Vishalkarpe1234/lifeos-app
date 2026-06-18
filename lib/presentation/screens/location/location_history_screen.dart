@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:dio/dio.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
 import 'package:lifeos/services/api/api_client.dart';
+import 'package:lifeos/services/location_service.dart';
 
 final _locationHistoryProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
@@ -36,6 +37,8 @@ class _LocationHistoryScreenState
   Position? _currentPosition;
   bool _loadingLive = false;
   DateTime? _lastUpdated;
+  bool _permissionGranted = false;
+  bool _trackingEnabled = false;
 
   // Geocode cache: item id -> address string
   final Map<int, String> _addressCache = {};
@@ -53,7 +56,13 @@ class _LocationHistoryScreenState
   void initState() {
     super.initState();
     _tabs = TabController(length: 3, vsync: this);
-    _getLiveLocation();
+    _checkPermissionAndLoad();
+  }
+
+  Future<void> _checkPermissionAndLoad() async {
+    final granted = await LocationService.isPermissionGrantedLocally();
+    if (mounted) setState(() => _permissionGranted = granted);
+    if (granted) _getLiveLocation();
   }
 
   @override
@@ -63,7 +72,22 @@ class _LocationHistoryScreenState
     super.dispose();
   }
 
+  Future<void> _requestPermissionAndTrack() async {
+    setState(() => _loadingLive = true);
+    try {
+      final dio = ref.read(dioProvider);
+      final ok = await LocationService.requestAndGrant(dio);
+      if (mounted) {
+        setState(() { _permissionGranted = ok; _trackingEnabled = ok; _loadingLive = false; });
+        if (ok) _getLiveLocation();
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingLive = false);
+    }
+  }
+
   Future<void> _getLiveLocation() async {
+    if (!_permissionGranted) { _requestPermissionAndTrack(); return; }
     setState(() => _loadingLive = true);
     try {
       final pos = await Geolocator.getCurrentPosition(
@@ -78,10 +102,7 @@ class _LocationHistoryScreenState
           _lastUpdated = DateTime.now();
           _loadingLive = false;
         });
-        try {
-          _mapController.move(
-              LatLng(pos.latitude, pos.longitude), 15);
-        } catch (_) {}
+        try { _mapController.move(LatLng(pos.latitude, pos.longitude), 15); } catch (_) {}
       }
     } catch (_) {
       final last = await Geolocator.getLastKnownPosition();
@@ -223,6 +244,40 @@ class _LocationHistoryScreenState
   // ───────────── TAB 1: LIVE ─────────────
 
   Widget _buildLiveTab() {
+    // Not yet granted — show enable button
+    if (!_permissionGranted) {
+      return Center(child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Container(width: 80, height: 80,
+            decoration: BoxDecoration(color: C.primary.withOpacity(0.1), shape: BoxShape.circle),
+            child: const Icon(Icons.location_on_rounded, color: C.primary, size: 40)),
+          const SizedBox(height: 20),
+          const Text('Enable Location Tracking', textAlign: TextAlign.center,
+            style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 20, color: C.text)),
+          const SizedBox(height: 12),
+          const Text(
+            'Allow location access to see your live position and track your history in the background.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontFamily: 'Inter', fontSize: 14, color: C.textSub, height: 1.5)),
+          const SizedBox(height: 28),
+          SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(
+            onPressed: _loadingLive ? null : _requestPermissionAndTrack,
+            icon: _loadingLive
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : const Icon(Icons.location_on_rounded),
+            label: Text(_loadingLive ? 'Enabling...' : 'Enable Location',
+              style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 16)),
+          )),
+          const SizedBox(height: 16),
+          const Text(
+            'You will see ONE location permission dialog from Android.\nThis is normal — just tap "Allow".',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontFamily: 'Inter', fontSize: 12, color: C.textMuted, height: 1.5)),
+        ]),
+      ));
+    }
+
     return Column(children: [
       Expanded(
         flex: 3,
@@ -236,14 +291,14 @@ class _LocationHistoryScreenState
                           const Icon(Icons.location_off_rounded,
                               color: C.textMuted, size: 48),
                           const SizedBox(height: 12),
-                          const Text('Location not available',
+                          const Text('Getting your location...',
                               style: TextStyle(
                                   fontFamily: 'Inter', color: C.textSub)),
                           const SizedBox(height: 16),
                           ElevatedButton.icon(
                             onPressed: _getLiveLocation,
                             icon: const Icon(Icons.my_location_rounded),
-                            label: const Text('Get Location'),
+                            label: const Text('Refresh'),
                           ),
                         ],
                       ),

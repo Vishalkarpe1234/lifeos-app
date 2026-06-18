@@ -22,7 +22,8 @@ Future<void> initializeBackgroundService() async {
     description: 'Keeps live location tracking active',
     importance: Importance.low,
   ));
-  await androidPlugin?.requestNotificationsPermission();
+  // Do NOT call requestNotificationsPermission() here — it shows a second dialog
+  // Android automatically handles notification permission for foreground services
 
   await service.configure(
     androidConfiguration: AndroidConfiguration(

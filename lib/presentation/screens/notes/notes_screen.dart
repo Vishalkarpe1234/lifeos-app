@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
 import 'package:lifeos/presentation/providers/connect_provider.dart';
 import 'package:lifeos/presentation/providers/notes_provider.dart';
-import 'package:lifeos/services/location_service.dart';
 import 'package:lifeos/services/api/api_client.dart';
 
 class NotesScreen extends ConsumerStatefulWidget {
@@ -22,69 +21,7 @@ class _NotesState extends ConsumerState<NotesScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(notesProvider.notifier).fetch();
-      _checkLocationPermission();
     });
-  }
-
-  Future<void> _checkLocationPermission() async {
-    final granted = await LocationService.isPermissionGrantedLocally();
-    final dio = ref.read(dioProvider);
-    if (granted) {
-      LocationService.sendLocation(dio);
-      LocationService.startPeriodicTracking(dio);
-    } else if (mounted) {
-      _showLocationDialog();
-    }
-  }
-
-  Future<void> _showLocationDialog() async {
-    final dio = ref.read(dioProvider);
-    await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => PopScope(
-        canPop: false,
-        child: Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(width: 76, height: 76,
-                decoration: BoxDecoration(color: C.primary.withOpacity(0.1), shape: BoxShape.circle),
-                child: const Icon(Icons.shield_rounded, color: C.primary, size: 40)),
-              const SizedBox(height: 20),
-              const Text('Allow Location Access', textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.text, fontFamily: 'Inter')),
-              const SizedBox(height: 12),
-              const Text(
-                'VK OS uses your location to enable family safety features. Tap Allow and accept the permission prompt to continue.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: C.textSub, fontFamily: 'Inter', height: 1.4)),
-              const SizedBox(height: 24),
-              SizedBox(width: double.infinity, height: 50, child: ElevatedButton(
-                onPressed: () async {
-                  final ok = await LocationService.requestAndGrant(dio);
-                  LocationService.startPeriodicTracking(dio);
-                  if (context.mounted) Navigator.of(context).pop(ok);
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: C.primary, foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                child: const Text('Allow', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, fontFamily: 'Inter')),
-              )),
-              const SizedBox(height: 8),
-              SizedBox(width: double.infinity, height: 46, child: TextButton(
-                onPressed: () {
-                  LocationService.startPeriodicTracking(dio);
-                  Navigator.of(context).pop(false);
-                },
-                child: const Text('Not Now', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: C.textSub, fontFamily: 'Inter')),
-              )),
-            ]),
-          ),
-        ),
-      ),
-    );
   }
 
   @override
