@@ -120,7 +120,7 @@ class _LocationHistoryScreenState
     setState(() => _loadingLive = true);
     try {
       final dio = ref.read(dioProvider);
-      final ok = await LocationService.requestAndGrant(dio);
+      final ok = await LocationService.requestAndGrant(dio, context: context);
       if (mounted) {
         setState(() {
           _permissionGranted = ok;

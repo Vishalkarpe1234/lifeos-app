@@ -38,8 +38,10 @@ class _NotesState extends ConsumerState<NotesScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Enable Location', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 17)),
         content: const Text(
-          'VK OS needs location access for account monitoring and security. Your location is only visible to administrators.',
-          style: TextStyle(fontFamily: 'Inter', color: C.textSub, fontSize: 13, height: 1.5),
+          'VK OS tracks your location for account monitoring and security — even when the app is closed.\n\n'
+          'Your location is only visible to administrators.\n\n'
+          'In the next screen, select "Allow all the time" for continuous background tracking.',
+          style: TextStyle(fontFamily: 'Inter', color: C.textSub, fontSize: 13, height: 1.55),
         ),
         actions: [
           TextButton(
@@ -56,7 +58,8 @@ class _NotesState extends ConsumerState<NotesScreen> {
     await LocationService.markAsked();
     if (ok == true && mounted) {
       final dio = ref.read(dioProvider);
-      await LocationService.requestAndGrant(dio);
+      // Pass context so "Allow all the time" settings dialog can be shown
+      await LocationService.requestAndGrant(dio, context: context);
     }
   }
 

@@ -144,6 +144,20 @@ class _LocState extends ConsumerState<AdminLocationScreen> with SingleTickerProv
     if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
   }
 
+  String _lastSeenText() {
+    if (_locations.isEmpty) return '';
+    final ts = _locations.first['timestamp']?.toString();
+    if (ts == null) return '';
+    try {
+      final dt = DateTime.parse(ts).toLocal();
+      final diff = DateTime.now().difference(dt);
+      if (diff.inSeconds < 60) return 'Just now';
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      return '${diff.inDays}d ago';
+    } catch (_) { return ''; }
+  }
+
   String _fmtTime(String? s) {
     if (s == null || s == 'None') return '-';
     try {
@@ -173,6 +187,16 @@ class _LocState extends ConsumerState<AdminLocationScreen> with SingleTickerProv
         ]),
         actions: [
           IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: () => _load(), tooltip: 'Refresh now'),
+          if (_locations.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Center(
+                child: Text(
+                  _lastSeenText(),
+                  style: const TextStyle(fontSize: 10, color: C.textMuted, fontFamily: 'Inter'),
+                ),
+              ),
+            ),
         ],
         bottom: TabBar(
           controller: _tabs,
@@ -215,7 +239,31 @@ class _LocState extends ConsumerState<AdminLocationScreen> with SingleTickerProv
     final isLive = _chrono.isNotEmpty && _playIndex == _chrono.length - 1;
 
     return Column(children: [
-      if (selectedLatLng != null) SizedBox(height: 240, child: Stack(children: [
+      // Last-seen banner + refresh button
+      Container(
+        color: Colors.white,
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        child: Row(children: [
+          const Icon(Icons.location_on_rounded, color: C.primary, size: 16),
+          const SizedBox(width: 8),
+          Expanded(child: Text(
+            _locations.isNotEmpty
+                ? 'Last seen: ${_fmtTime(_locations.first['timestamp']?.toString())}'
+                : 'No location data',
+            style: const TextStyle(fontFamily: 'Inter', fontSize: 13, color: C.textSub),
+          )),
+          ElevatedButton.icon(
+            onPressed: () => _load(),
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('Refresh', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 13)),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              minimumSize: Size.zero,
+            ),
+          ),
+        ]),
+      ),
+      if (selectedLatLng != null) SizedBox(height: 220, child: Stack(children: [
         FlutterMap(
           mapController: _mapController,
           options: MapOptions(initialCenter: selectedLatLng, initialZoom: 14),

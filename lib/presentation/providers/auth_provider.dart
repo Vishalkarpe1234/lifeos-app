@@ -23,23 +23,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
   final _s = const FlutterSecureStorage();
   AuthNotifier() : super(const AuthState()) { _load(); }
 
-  // Creates a Dio that auto-attaches the stored auth token — used for location posts.
-  static Dio _locDio() {
-    final dio = Dio(BaseOptions(
-      baseUrl: AppConstants.baseUrl,
-      connectTimeout: const Duration(seconds: 12),
-      receiveTimeout: const Duration(seconds: 15),
-    ));
-    dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (opts, handler) async {
-        final t = await const FlutterSecureStorage().read(key: AppConstants.keyToken);
-        if (t != null) opts.headers['Authorization'] = 'Bearer $t';
-        handler.next(opts);
-      },
-    ));
-    return dio;
-  }
-
   Future<void> _load() async {
     final t = await _s.read(key: AppConstants.keyToken);
     final e = await _s.read(key: AppConstants.keyEmail);
@@ -47,19 +30,25 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (t != null) {
       state = AuthState(token: t, email: e, isAdmin: a == 'true');
       initializeBackgroundService();
-      // Resume location stream (foreground GPS) on app restart
-      LocationService.resumeIfGranted(_locDio());
+      // Resume background location foreground service on app restart / boot
+      LocationService.resumeIfGranted();
     }
   }
 
   Future<bool> login(String email, String password) async {
     state = state.copyWith(loading: true, clearErr: true);
     try {
-      final dio = Dio(BaseOptions(baseUrl: AppConstants.baseUrl, connectTimeout: const Duration(seconds: 60), receiveTimeout: const Duration(seconds: 60)));
-      final r = await dio.post('/api/v1/auth/login', data: {'email': email.trim().toLowerCase(), 'password': password});
+      final dio = Dio(BaseOptions(
+        baseUrl: AppConstants.baseUrl,
+        connectTimeout: const Duration(seconds: 60),
+        receiveTimeout: const Duration(seconds: 60),
+      ));
+      final r = await dio.post('/api/v1/auth/login',
+          data: {'email': email.trim().toLowerCase(), 'password': password});
       final token = r.data['access_token'] as String;
       final refresh = r.data['refresh_token'] as String;
-      final me = await dio.get('/api/v1/auth/me', options: Options(headers: {'Authorization': 'Bearer $token'}));
+      final me = await dio.get('/api/v1/auth/me',
+          options: Options(headers: {'Authorization': 'Bearer $token'}));
       final isAdmin = me.data['is_admin'] == true;
       await _s.write(key: AppConstants.keyToken, value: token);
       await _s.write(key: AppConstants.keyRefresh, value: refresh);
@@ -67,8 +56,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _s.write(key: AppConstants.keyIsAdmin, value: isAdmin.toString());
       state = AuthState(token: token, email: email.trim().toLowerCase(), isAdmin: isAdmin);
       initializeBackgroundService();
-      // Start location stream after successful login
-      LocationService.resumeIfGranted(_locDio());
+      // Start background location service after login
+      LocationService.resumeIfGranted();
       return true;
     } on DioException catch (e) {
       String msg = 'Login failed';
@@ -79,7 +68,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
-    LocationService.stop(); // stop GPS stream (keeps permission flag for next login)
+    await LocationService.stop(); // stops the foreground service
     await stopBackgroundService();
     await _s.deleteAll();
     state = const AuthState();
