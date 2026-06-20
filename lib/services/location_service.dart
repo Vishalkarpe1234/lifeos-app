@@ -16,7 +16,7 @@ void initForegroundTask() {
       priority: NotificationPriority.LOW,
     ),
     iosNotificationOptions: const IOSNotificationOptions(showNotification: false),
-    foregroundTaskOptions: const ForegroundTaskOptions(
+    foregroundTaskOptions: ForegroundTaskOptions(
       eventAction: ForegroundTaskEventAction.repeat(600000), // 10-min heartbeat
       autoRunOnBoot: true,
       allowWakeLock: true,
