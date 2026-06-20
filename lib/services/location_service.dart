@@ -18,8 +18,8 @@ void initForegroundTask() {
     iosNotificationOptions: const IOSNotificationOptions(showNotification: false),
     foregroundTaskOptions: ForegroundTaskOptions(
       eventAction: ForegroundTaskEventAction.repeat(600000), // 10-min heartbeat
-      autoRunOnBoot: true,
-      allowWakeLock: true,
+      autoRunOnBoot: true,  // restarts service after phone reboot
+      allowWakeLock: true,  // keeps CPU awake between GPS polls
     ),
   );
 }
@@ -40,8 +40,8 @@ class LocationService {
 
   // ── Main entry point ─────────────────────────────────────────────────────────
 
-  /// Requests location permission. Returns immediately after the system dialog
-  /// is answered — service startup happens in background to avoid UI freeze.
+  /// Requests location permission. Returns immediately — service startup and
+  /// battery-optimization prompt happen in background to avoid UI freeze.
   static Future<bool> requestAndGrant(Dio dio, {BuildContext? context}) async {
     try {
       // 1. GPS must be enabled
@@ -70,10 +70,10 @@ class LocationService {
       dio.patch('/api/v1/location/permission', data: {'granted': true})
           .catchError((_) {});
 
-      // 4. Launch service fire-and-forget — does NOT block the UI thread.
-      _launchServiceInBackground();
+      // 4. Launch service + battery-optimization in background (fire-and-forget)
+      _launchServiceInBackground(context: context);
 
-      // 5. Show "Allow all the time" nudge asynchronously (non-blocking).
+      // 5. Show "Allow all the time" nudge asynchronously if only whileInUse granted
       if (perm == LocationPermission.whileInUse && context != null && context.mounted) {
         Future.microtask(() {
           if (context.mounted) _promptBackgroundUpgrade(context);
@@ -86,12 +86,22 @@ class LocationService {
     }
   }
 
-  // Fire-and-forget — never awaited by the caller so the UI never freezes.
-  static void _launchServiceInBackground() {
+  // Runs completely detached — never awaited. Does NOT block the UI.
+  static void _launchServiceInBackground({BuildContext? context}) {
     Future(() async {
       try {
+        // Android 13+ notification permission
         await FlutterForegroundTask.requestNotificationPermission();
+        // Start foreground service
         await _startService();
+        // Request battery optimization exemption — critical for service survival
+        // when device enters Doze mode or app is swiped away
+        try {
+          final ignored = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
+          if (!ignored) {
+            await FlutterForegroundTask.requestIgnoreBatteryOptimization();
+          }
+        } catch (_) {}
       } catch (_) {}
     });
   }
@@ -150,6 +160,13 @@ class LocationService {
             perm == LocationPermission.whileInUse;
         if (!ok) return;
         await _startService();
+        // Re-request battery exemption if it was cleared by OS
+        try {
+          final ignored = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
+          if (!ignored) {
+            await FlutterForegroundTask.requestIgnoreBatteryOptimization();
+          }
+        } catch (_) {}
       } catch (_) {}
     });
   }

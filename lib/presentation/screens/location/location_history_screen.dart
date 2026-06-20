@@ -386,7 +386,7 @@ class _LocationHistoryScreenState
                     children: [
                       TileLayer(
                         urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
                         userAgentPackageName: 'com.vishalkarpe.lifeos',
                       ),
                       // Accuracy radius circle
@@ -833,7 +833,7 @@ class _LocationHistoryScreenState
                   children: [
                     TileLayer(
                       urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
                       userAgentPackageName: 'com.vishalkarpe.lifeos',
                     ),
                     MarkerLayer(markers: [

@@ -29,6 +29,8 @@
     <!-- Boot receiver — restart service after phone reboot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- Allow requesting battery optimization exemption so service survives Doze mode -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 
     <application
         android:label="VK OS"
@@ -55,9 +57,11 @@
         </activity>
 
         <!-- flutter_foreground_task: background location service -->
+        <!-- stopWithTask="false" keeps service alive when user swipes app away -->
         <service
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:foregroundServiceType="location"
+            android:stopWithTask="false"
             android:exported="false"/>
 
         <!-- flutter_foreground_task: restart service after device reboot -->

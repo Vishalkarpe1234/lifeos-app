@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lifeos/config/router/app_router.dart';
 import 'package:lifeos/config/theme/app_theme.dart';
@@ -7,7 +8,9 @@ import 'package:lifeos/services/location_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  initForegroundTask(); // configure notification channel before runApp
+  // Required for background task handler to receive events from the main isolate
+  FlutterForegroundTask.initCommunicationPort();
+  initForegroundTask();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,

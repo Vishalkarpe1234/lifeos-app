@@ -31,6 +31,9 @@ class LocationTaskHandler extends TaskHandler {
       return;
     }
     _startStream();
+    // Force an immediate position send so admin sees location right after
+    // app is opened, phone reboots, or service restarts — don't wait 10 min.
+    await _forcePost(token);
   }
 
   /// Called every 10 minutes as a heartbeat — sends location even if stationary.
