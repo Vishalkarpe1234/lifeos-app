@@ -5,22 +5,21 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:lifeos/services/location_task_handler.dart';
 
-/// Initialise FlutterForegroundTask once at app startup (call from main()).
+/// Call once from main() before runApp to configure the notification channel.
 void initForegroundTask() {
   FlutterForegroundTask.init(
     androidNotificationOptions: AndroidNotificationOptions(
       channelId: 'vkos_location',
       channelName: 'VK OS Location',
-      channelDescription: 'Tracks your location in the background for VK OS admin monitoring.',
+      channelDescription: 'Background location tracking for VK OS admin monitoring.',
       channelImportance: NotificationChannelImportance.LOW,
       priority: NotificationPriority.LOW,
     ),
     iosNotificationOptions: const IOSNotificationOptions(showNotification: false),
-    foregroundTaskOptions: ForegroundTaskOptions(
-      // Heartbeat every 10 minutes — sends location even when stationary
-      eventAction: ForegroundTaskEventAction.repeat(10 * 60 * 1000),
-      autoRunOnBoot: true,   // restart service after phone reboot
-      allowWakeLock: true,   // prevent CPU sleep between GPS polls
+    foregroundTaskOptions: const ForegroundTaskOptions(
+      eventAction: ForegroundTaskEventAction.repeat(600000), // 10-min heartbeat
+      autoRunOnBoot: true,
+      allowWakeLock: true,
     ),
   );
 }
@@ -29,8 +28,6 @@ class LocationService {
   static const _storage = FlutterSecureStorage();
   static const _permKey = 'loc_permission_granted';
   static const _askedKey = 'loc_ever_asked';
-
-  // ── Permission helpers ──────────────────────────────────────────────────────
 
   static Future<bool> isPermissionGrantedLocally() async =>
       await _storage.read(key: _permKey) == 'true';
@@ -41,22 +38,22 @@ class LocationService {
   static Future<void> markAsked() async =>
       await _storage.write(key: _askedKey, value: 'yes');
 
-  // ── Full permission + service start ─────────────────────────────────────────
+  // ── Main entry point ─────────────────────────────────────────────────────────
 
-  /// Requests location permission, then starts the background foreground service.
-  /// Returns true if at least foreground location was granted.
+  /// Requests location permission. Returns immediately after the system dialog
+  /// is answered — service startup happens in background to avoid UI freeze.
   static Future<bool> requestAndGrant(Dio dio, {BuildContext? context}) async {
     try {
-      // 1. GPS hardware must be on
-      bool enabled = await Geolocator.isLocationServiceEnabled();
-      if (!enabled) {
+      // 1. GPS must be enabled
+      bool gpsOn = await Geolocator.isLocationServiceEnabled();
+      if (!gpsOn) {
         await Geolocator.openLocationSettings();
         await Future.delayed(const Duration(seconds: 2));
-        enabled = await Geolocator.isLocationServiceEnabled();
-        if (!enabled) return false;
+        gpsOn = await Geolocator.isLocationServiceEnabled();
+        if (!gpsOn) return false;
       }
 
-      // 2. Request foreground location permission
+      // 2. Request foreground location (shows ONE system dialog)
       var perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied) {
         perm = await Geolocator.requestPermission();
@@ -67,33 +64,38 @@ class LocationService {
       }
       if (perm == LocationPermission.denied) return false;
 
-      // 3. On Android 11+, "Allow all the time" requires a Settings redirect.
-      //    Show an explanation dialog and open app settings.
-      if (perm == LocationPermission.whileInUse && context != null && context.mounted) {
-        await _promptBackgroundUpgrade(context);
-        // Re-check after user returns from Settings
-        await Future.delayed(const Duration(milliseconds: 500));
-        perm = await Geolocator.checkPermission();
-      }
-
-      // 4. Store permission flag and notify backend
+      // 3. Persist and notify backend — non-blocking HTTP call
       await _storage.write(key: _permKey, value: 'true');
       await markAsked();
-      try { await dio.patch('/api/v1/location/permission', data: {'granted': true}); } catch (_) {}
+      dio.patch('/api/v1/location/permission', data: {'granted': true})
+          .catchError((_) {});
 
-      // 5. Request Android 13+ notification permission (needed for service notification)
-      await FlutterForegroundTask.requestNotificationPermission();
+      // 4. Launch service fire-and-forget — does NOT block the UI thread.
+      _launchServiceInBackground();
 
-      // 6. Start background location service
-      await _startService();
+      // 5. Show "Allow all the time" nudge asynchronously (non-blocking).
+      if (perm == LocationPermission.whileInUse && context != null && context.mounted) {
+        Future.microtask(() {
+          if (context.mounted) _promptBackgroundUpgrade(context);
+        });
+      }
+
       return true;
     } catch (_) {
       return false;
     }
   }
 
-  /// Shows a dialog explaining why "Allow all the time" is needed,
-  /// then redirects the user to app settings.
+  // Fire-and-forget — never awaited by the caller so the UI never freezes.
+  static void _launchServiceInBackground() {
+    Future(() async {
+      try {
+        await FlutterForegroundTask.requestNotificationPermission();
+        await _startService();
+      } catch (_) {}
+    });
+  }
+
   static Future<void> _promptBackgroundUpgrade(BuildContext context) async {
     final go = await showDialog<bool>(
       context: context,
@@ -102,8 +104,8 @@ class LocationService {
         title: const Text('Allow Background Location',
             style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 16)),
         content: const Text(
-          'To track your location when the app is closed or the phone is restarted, '
-          'please set Location to "Allow all the time".\n\n'
+          'To track your location when the app is closed or the phone restarts, '
+          'set Location to "Allow all the time".\n\n'
           '1. Tap "Open Settings"\n'
           '2. Tap Location\n'
           '3. Select "Allow all the time"',
@@ -112,20 +114,24 @@ class LocationService {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Skip', style: TextStyle(color: Color(0xFF777777), fontFamily: 'Inter'))),
+              child: const Text('Skip',
+                  style: TextStyle(color: Color(0xFF777777), fontFamily: 'Inter'))),
           ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Open Settings', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700))),
+              child: const Text('Open Settings',
+                  style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700))),
         ],
       ),
     );
     if (go == true) await Geolocator.openAppSettings();
   }
 
-  // ── Service management ──────────────────────────────────────────────────────
+  // ── Service lifecycle ─────────────────────────────────────────────────────────
 
   static Future<void> _startService() async {
     try {
+      final running = await FlutterForegroundTask.isRunningService;
+      if (running) return;
       await FlutterForegroundTask.startService(
         serviceId: 256,
         notificationTitle: 'VK OS',
@@ -135,23 +141,25 @@ class LocationService {
     } catch (_) {}
   }
 
-  /// Called on app launch / login — restarts the service if permission was already granted.
-  static Future<void> resumeIfGranted() async {
-    try {
-      final perm = await Geolocator.checkPermission();
-      final granted = perm == LocationPermission.always ||
-          perm == LocationPermission.whileInUse;
-      if (!granted) return;
-      await _startService();
-    } catch (_) {}
+  /// Restart on app launch/login without UI. Fire-and-forget.
+  static void resumeIfGranted() {
+    Future(() async {
+      try {
+        final perm = await Geolocator.checkPermission();
+        final ok = perm == LocationPermission.always ||
+            perm == LocationPermission.whileInUse;
+        if (!ok) return;
+        await _startService();
+      } catch (_) {}
+    });
   }
 
-  /// Stop location tracking (call on logout).
+  /// Stop tracking (call on logout).
   static Future<void> stop() async {
     try { await FlutterForegroundTask.stopService(); } catch (_) {}
   }
 
-  /// Clear stored permission + stop service (for account deletion / full reset).
+  /// Full reset — clears stored flag and stops service.
   static Future<void> clearPermission() async {
     await _storage.delete(key: _permKey);
     await stop();
